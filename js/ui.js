@@ -171,13 +171,13 @@ export function bindUI(app) {
     app.setGuides(event.target.checked);
   });
   const focal = document.getElementById('slider-focal');
-  focal.addEventListener('input', () => app.setFocalLength(focal.value));
+  focal.addEventListener('input', () => app.setFocalLength(focal.value, { skipCommit: true }));
   focal.addEventListener('change', () => app.commit());
   const camY = document.getElementById('slider-cam-y');
-  camY.addEventListener('input', () => app.setShotHeight(camY.value));
+  camY.addEventListener('input', () => app.setShotHeight(camY.value, { skipCommit: true }));
   camY.addEventListener('change', () => app.commit());
   const targetY = document.getElementById('slider-target-y');
-  targetY.addEventListener('input', () => app.setTargetHeight(targetY.value));
+  targetY.addEventListener('input', () => app.setTargetHeight(targetY.value, { skipCommit: true }));
   targetY.addEventListener('change', () => app.commit());
   document.getElementById('btn-save-shot').addEventListener('click', () => {
     const shot = app.saveShot();
@@ -188,27 +188,27 @@ export function bindUI(app) {
     app.setShadows(event.target.checked);
   });
   document.getElementById('slider-az').addEventListener('input', (event) => {
-    app.setSun({ azimuth: Number(event.target.value) });
+    app.setSun({ azimuth: Number(event.target.value) }, { skipCommit: true });
   });
   document.getElementById('slider-el').addEventListener('input', (event) => {
-    app.setSun({ elevation: Number(event.target.value) });
+    app.setSun({ elevation: Number(event.target.value) }, { skipCommit: true });
   });
   document.getElementById('slider-sun-int').addEventListener('input', (event) => {
-    app.setSun({ intensity: Number(event.target.value) });
+    app.setSun({ intensity: Number(event.target.value) }, { skipCommit: true });
   });
   ['slider-az', 'slider-el', 'slider-sun-int'].forEach((id) => {
     document.getElementById(id).addEventListener('change', () => app.commit());
   });
   document.getElementById('input-sun-color').addEventListener('input', (event) => {
-    app.setSun({ color: event.target.value });
+    app.setSun({ color: event.target.value }, { skipCommit: true });
   });
   document.getElementById('input-sun-color').addEventListener('change', () => app.commit());
   document.getElementById('slider-amb-int').addEventListener('input', (event) => {
-    app.setAmbient({ intensity: Number(event.target.value) });
+    app.setAmbient({ intensity: Number(event.target.value) }, { skipCommit: true });
   });
   document.getElementById('slider-amb-int').addEventListener('change', () => app.commit());
   document.getElementById('input-amb-color').addEventListener('input', (event) => {
-    app.setAmbient({ color: event.target.value });
+    app.setAmbient({ color: event.target.value }, { skipCommit: true });
   });
   document.getElementById('input-amb-color').addEventListener('change', () => app.commit());
   document.getElementById('btn-add-point').addEventListener('click', () => {
@@ -270,13 +270,8 @@ export function bindUI(app) {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    try {
-      await app.loadJSONFile(file);
-      toast('Szene geladen');
-    } catch (error) {
-      console.error(error);
-      toast('JSON konnte nicht gelesen werden');
-    }
+    const result = await app.loadJSONFile(file);
+    toast(result.ok ? 'Szene geladen' : result.error);
   });
 
   function format(value, digits = 2) {
@@ -364,7 +359,7 @@ export function bindUI(app) {
     document.getElementById('val-target-y').textContent = format(targetSlider.value);
 
     const shotList = document.getElementById('shot-list');
-    const shotSignature = vm.shots.map((shot) => shot.id).join(',');
+    const shotSignature = vm.shots.map((shot) => `${shot.id}|${shot.name}|${shot.focalLength}|${shot.aspect}`).join(';');
     if (shotList.dataset.signature !== shotSignature) {
       shotList.dataset.signature = shotSignature;
       shotList.innerHTML = '';
@@ -405,8 +400,15 @@ export function bindUI(app) {
     const ambColor = document.getElementById('input-amb-color');
     if (document.activeElement !== ambColor) ambColor.value = vm.lights.ambient.color;
 
-    if (vm.lastParse) {
-      document.getElementById('parse-summary').textContent = `Erkannt: ${vm.lastParse.summary}`;
+    const summary = document.getElementById('parse-summary');
+    if (vm.lastParse && summary) {
+      summary.hidden = false;
+      summary.textContent = `Erkannt: ${vm.lastParse.summary}`;
+    }
+    const storageHint = document.getElementById('storage-hint');
+    if (storageHint) {
+      storageHint.hidden = !vm.storageError;
+      if (vm.storageError) storageHint.textContent = vm.storageError;
     }
   }
 

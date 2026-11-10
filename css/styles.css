@@ -429,14 +429,64 @@ textarea {
   z-index: 20;
 }
 
-@media (orientation: landscape) {
-  #sheet {
-    max-height: min(48vh, 320px);
-  }
+#storage-hint {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: calc(var(--safe-top) + 118px);
+  z-index: 9;
+  background: #5a2e2a;
+  color: #ffd8d3;
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 14px;
+  text-align: center;
 }
 
-@media (min-width: 720px) {
-  #sheet {
+#parse-help ul {
+  margin: 6px 0 0;
+  padding-left: 1.2em;
+}
+
+#parse-help li {
+  margin: 4px 0;
+}
+
+body.layout-side #sheet {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: auto;
+  width: min(340px, 46vw);
+  max-width: 400px;
+  max-height: none;
+  height: auto;
+  border-radius: 0;
+  border-top: none;
+  border-left: 1px solid var(--line);
+  padding-top: calc(var(--safe-top) + 8px);
+  padding-bottom: calc(var(--safe-bottom) + 8px);
+}
+
+body.layout-side #topbar {
+  right: min(340px, 46vw);
+}
+
+body.layout-side #more-menu {
+  right: calc(min(340px, 46vw) + 12px);
+}
+
+body.layout-side #toast,
+body.layout-side #storage-hint {
+  right: calc(min(340px, 46vw) + 16px);
+}
+
+body.layout-side .insert-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (orientation: portrait) and (min-width: 720px) {
+  body.layout-bottom #sheet {
     max-width: 520px;
     left: auto;
     right: 16px;

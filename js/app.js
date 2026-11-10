@@ -29,6 +29,7 @@ import {
 } from './objects.js';
 import { parseSceneText } from './parser.js';
 import { captureCanvas, resolutionFromLongEdge, shareOrDownload } from './export.js';
+import { validateAndNormalizeScene } from './schema.js';
 
 export class BuehneApp {
   constructor(canvas, overlay) {
@@ -48,6 +49,8 @@ export class BuehneApp {
     this.lights = structuredClone(DEFAULT_LIGHTS);
     this.currentLightPreset = 'mittag';
     this.lastParse = null;
+    this.lastError = null;
+    this.storageError = null;
     this.history = new HistoryStack(40);
     this.listeners = new Set();
     this.ready = false;
@@ -98,8 +101,30 @@ export class BuehneApp {
 
   emitChange() {
     this._scheduleSave();
+    this._notify();
+  }
+
+  _notify() {
     const model = this.getViewModel();
     this.listeners.forEach((fn) => fn(model));
+  }
+
+  _finishSetting(options = {}) {
+    if (options.skipCommit) this.emitChange();
+    else {
+      this.commit();
+      this.emitChange();
+    }
+  }
+
+  _syncLayoutMode() {
+    const side = window.matchMedia('(orientation: landscape)').matches;
+    document.body.classList.toggle('layout-side', side);
+    document.body.classList.toggle('layout-bottom', !side);
+  }
+
+  isSidePanelLayout() {
+    return document.body.classList.contains('layout-side') || window.matchMedia('(orientation: landscape)').matches;
   }
 
   _setupRenderer() {
@@ -259,6 +284,7 @@ export class BuehneApp {
 
   _setupEvents() {
     window.addEventListener('resize', () => this.resize());
+    window.matchMedia('(orientation: landscape)').addEventListener('change', () => this.resize());
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', () => this.resize());
       window.visualViewport.addEventListener('scroll', () => this.resize());
@@ -298,6 +324,7 @@ export class BuehneApp {
   }
 
   resize() {
+    this._syncLayoutMode();
     const width = Math.max(1, this.canvas.clientWidth);
     const height = Math.max(1, this.canvas.clientHeight);
     this.renderer.setSize(width, height, false);
@@ -351,14 +378,25 @@ export class BuehneApp {
     const canvasRect = this.canvas.getBoundingClientRect();
     const topbar = document.getElementById('topbar');
     const sheet = document.getElementById('sheet');
-    const top = topbar ? topbar.getBoundingClientRect().bottom - canvasRect.top + 8 : 64;
-    const bottom = sheet ? sheet.getBoundingClientRect().top - canvasRect.top - 8 : canvasRect.height - 16;
-    const left = 10;
-    const right = canvasRect.width - 10;
+    const topbarRect = topbar ? topbar.getBoundingClientRect() : null;
+    const sheetRect = sheet ? sheet.getBoundingClientRect() : null;
+    const top = topbarRect ? topbarRect.bottom - canvasRect.top + 8 : 64;
+    if (this.isSidePanelLayout() && sheetRect) {
+      const left = 10;
+      const right = sheetRect.left - canvasRect.left - 8;
+      const bottom = canvasRect.height - 10;
+      return {
+        x: left,
+        y: Math.max(8, top),
+        w: Math.max(40, right - left),
+        h: Math.max(40, bottom - Math.max(8, top))
+      };
+    }
+    const bottom = sheetRect ? sheetRect.top - canvasRect.top - 8 : canvasRect.height - 16;
     return {
-      x: left,
+      x: 10,
       y: Math.max(8, top),
-      w: Math.max(40, right - left),
+      w: Math.max(40, canvasRect.width - 20),
       h: Math.max(40, bottom - Math.max(8, top))
     };
   }
@@ -571,15 +609,15 @@ export class BuehneApp {
     }
   }
 
-  setTransformMode(mode) {
+  setTransformMode(mode, options = {}) {
     this.transformMode = mode;
     this.transform.setMode(mode);
-    this.emitChange();
+    this._finishSetting(options);
   }
 
-  setUniformScale(value) {
+  setUniformScale(value, options = {}) {
     this.uniformScale = Boolean(value);
-    this.emitChange();
+    this._finishSetting(options);
   }
 
   setSelectedPosition(axis, value) {
@@ -660,17 +698,17 @@ export class BuehneApp {
   setFocalLength(mm, options = {}) {
     this.focalLength = clamp(Number(mm), 14, 200);
     this._applyShotProjection();
-    if (!options.skipCommit) this.emitChange();
+    this._finishSetting(options);
   }
 
   setAspect(key, options = {}) {
     if (!ASPECTS[key]) return;
     this.aspectKey = key;
     this._applyShotProjection();
-    if (!options.skipCommit) this.emitChange();
+    this._finishSetting(options);
   }
 
-  setThroughShot(enabled) {
+  setThroughShot(enabled, options = {}) {
     const next = Boolean(enabled);
     if (next === this.throughShot) {
       this.emitChange();
@@ -694,35 +732,35 @@ export class BuehneApp {
     this.orbit.update();
     this.throughShot = next;
     this._attachGizmo();
-    this.emitChange();
+    this._finishSetting(options);
   }
 
-  setShotHeight(value) {
+  setShotHeight(value, options = {}) {
     this.shotCamera.position.y = Number(value);
     this.shotCamera.lookAt(this.shotTarget);
     if (this.throughShot) this.orbit.update();
-    this.emitChange();
+    this._finishSetting(options);
   }
 
-  setTargetHeight(value) {
+  setTargetHeight(value, options = {}) {
     this.shotTarget.y = Number(value);
     this.shotCamera.lookAt(this.shotTarget);
     if (this.throughShot) {
       this.orbit.target.copy(this.shotTarget);
       this.orbit.update();
     }
-    this.emitChange();
+    this._finishSetting(options);
   }
 
-  setGuides(enabled) {
+  setGuides(enabled, options = {}) {
     this.showGuides = Boolean(enabled);
-    this.emitChange();
+    this._finishSetting(options);
   }
 
-  setGizmoVisible(enabled) {
+  setGizmoVisible(enabled, options = {}) {
     this.showGizmo = Boolean(enabled);
     this._attachGizmo();
-    this.emitChange();
+    this._finishSetting(options);
   }
 
   setShadows(enabled, options = {}) {
@@ -737,13 +775,13 @@ export class BuehneApp {
   setSun(partial, options = {}) {
     Object.assign(this.lights.sun, partial);
     this._syncSun();
-    if (!options.skipCommit) this.emitChange();
+    this._finishSetting(options);
   }
 
   setAmbient(partial, options = {}) {
     Object.assign(this.lights.ambient, partial);
     this._syncSun();
-    if (!options.skipCommit) this.emitChange();
+    this._finishSetting(options);
   }
 
   applyLightPreset(name, options = {}) {
@@ -881,12 +919,22 @@ export class BuehneApp {
     if (plan.room === true || plan.room === false) this.setRoom(plan.room, { skipCommit: true });
 
     const figureIds = [];
-    for (let i = 0; i < plan.figures.count; i += 1) {
+    const specs = plan.figures.specs && plan.figures.specs.length
+      ? plan.figures.specs
+      : Array.from({ length: plan.figures.count }, () => ({ pose: plan.figures.pose, position: { key: 'mitte', x: 0, z: 0 } }));
+    specs.forEach((spec) => {
       const item = this.insert('figure', { skipCommit: true, skipPlace: true, skipSelect: true });
       figureIds.push(item.id);
-      if (plan.figures.pose) this.applyPose(item.id, plan.figures.pose, { skipCommit: true });
+      if (spec.pose) this.applyPose(item.id, spec.pose, { skipCommit: true });
+    });
+    const hasIndividual = specs.some((spec) => spec.position && spec.position.key !== 'mitte');
+    if (hasIndividual) {
+      specs.forEach((spec, index) => {
+        this._setItemXZRot(figureIds[index], spec.position.x, spec.position.z, 0);
+      });
+    } else {
+      this.layoutFigures(figureIds, plan.figures.formation);
     }
-    this.layoutFigures(figureIds, plan.figures.formation);
 
     plan.objects.forEach((spec) => {
       for (let i = 0; i < spec.count; i += 1) {
@@ -1122,8 +1170,16 @@ export class BuehneApp {
   _writeAutosave() {
     try {
       localStorage.setItem(STORAGE_KEY, this.serializeString());
+      if (this.storageError) {
+        this.storageError = null;
+        this._notify();
+      }
     } catch (error) {
-      console.warn('Autosave fehlgeschlagen', error);
+      const message = 'Speichern im Browser fehlgeschlagen. Der Speicher ist möglicherweise voll.';
+      if (this.storageError !== message) {
+        this.storageError = message;
+        this._notify();
+      }
     }
   }
 
@@ -1198,13 +1254,65 @@ export class BuehneApp {
     return blob;
   }
 
-  async loadJSONFile(file) {
-    const text = await file.text();
-    const data = JSON.parse(text);
-    this.deserialize(data);
+  loadJSONData(input) {
+    this.lastError = null;
+    let data;
+    try {
+      data = typeof input === 'string' ? JSON.parse(input) : input;
+    } catch {
+      this.lastError = 'Die Datei ist kein gültiges JSON.';
+      this._notify();
+      return { ok: false, error: this.lastError };
+    }
+    let normalized;
+    try {
+      normalized = validateAndNormalizeScene(data);
+    } catch (error) {
+      this.lastError = error.message || 'Die Datei entspricht nicht dem Szenenformat.';
+      this._notify();
+      return { ok: false, error: this.lastError };
+    }
+
+    const backup = this.serialize();
+    try {
+      this.deserialize(normalized);
+    } catch (error) {
+      console.warn(error);
+      try {
+        this.deserialize(backup);
+      } catch (restoreError) {
+        console.warn(restoreError);
+      }
+      this.lastError = 'Die Szene konnte nicht geladen werden. Die aktuelle Szene bleibt unverändert.';
+      this._notify();
+      return { ok: false, error: this.lastError };
+    }
+
     this.history.clear();
     this.commit();
+    this.lastError = null;
     this.emitChange();
+    return { ok: true };
+  }
+
+  async loadJSONFile(file) {
+    const text = await file.text();
+    return this.loadJSONData(text);
+  }
+
+  getLayoutInfo() {
+    this._syncLayoutMode();
+    const canvasRect = this.canvas.getBoundingClientRect();
+    const sheet = document.getElementById('sheet');
+    const sheetRect = sheet ? sheet.getBoundingClientRect() : null;
+    return {
+      layout: this.isSidePanelLayout() ? 'landscape' : 'portrait',
+      visibleRect: this._visibleStageRect(),
+      renderRect: this._lastRenderRect,
+      frameRect: this._lastFrameRect,
+      canvas: { left: canvasRect.left, top: canvasRect.top, width: canvasRect.width, height: canvasRect.height },
+      sheet: sheetRect ? { left: sheetRect.left, top: sheetRect.top, width: sheetRect.width, height: sheetRect.height } : null
+    };
   }
 
   _pick(event) {
@@ -1267,7 +1375,15 @@ export class BuehneApp {
       lightPreset: this.currentLightPreset,
       canUndo: this.history.canUndo(),
       canRedo: this.history.canRedo(),
-      lastParse: this.lastParse
+      lastParse: this.lastParse,
+      lastError: this.lastError,
+      storageError: this.storageError,
+      shots: this.shots.map((shot) => ({
+        id: shot.id,
+        name: shot.name,
+        focalLength: shot.focalLength,
+        aspect: shot.aspect
+      }))
     };
   }
 
@@ -1319,7 +1435,9 @@ export class BuehneApp {
       currentLightPreset: this.currentLightPreset,
       canUndo: this.history.canUndo(),
       canRedo: this.history.canRedo(),
-      lastParse: this.lastParse
+      lastParse: this.lastParse,
+      lastError: this.lastError,
+      storageError: this.storageError
     };
   }
 }

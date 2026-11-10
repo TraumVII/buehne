@@ -64,6 +64,41 @@ window.Buehne = {
   },
   setWorkView(position, target) {
     app.setWorkView(position, target);
+  },
+  loadJSON(input) {
+    const result = app.loadJSONData(input);
+    if (!result.ok) {
+      const toast = document.getElementById('toast');
+      if (toast) {
+        toast.hidden = false;
+        toast.textContent = result.error;
+      }
+    }
+    return result;
+  },
+  setAspect(key) {
+    app.setAspect(key);
+  },
+  setFocalLength(mm) {
+    app.setFocalLength(mm);
+  },
+  saveShot(name) {
+    return app.saveShot(name);
+  },
+  overwriteShot(id) {
+    app.overwriteShot(id);
+  },
+  getLayoutInfo() {
+    return app.getLayoutInfo();
+  },
+  clearSelection() {
+    app.clearSelection();
+  },
+  undo() {
+    app.undo();
+  },
+  redo() {
+    app.redo();
   }
 };
 

@@ -8,7 +8,7 @@ Die Oberfläche ist auf Deutsch und für Touch auf dem iPhone ausgelegt. Es gibt
 
 Die Datei muss über HTTP geladen werden (nicht als `file://`), damit die Module funktionieren.
 
-- Später vorgesehen: GitHub Pages
+- Live: https://traumvii.github.io/buehne/
 - Lokal: beliebiger statischer Server im Ordner, zum Beispiel `python3 -m http.server 4173`
 
 Zum Home-Bildschirm: in Safari „Zum Home-Bildschirm“ wählen (PWA-Manifest ist enthalten).
@@ -21,7 +21,7 @@ Zum Home-Bildschirm: in Safari „Zum Home-Bildschirm“ wählen (PWA-Manifest i
 - Figuren: Pose-Voreinstellungen (stehen, gehen, sitzen, zeigen, kniend, liegend) und Gelenk-Slider.
 - **Kamera:** Brennweite 14–200 mm, Seitenverhältnisse 16:9, 9:16, 2.39:1, 4:3, 1:1. „Durch die Shot-Kamera schauen“ zeigt den Bildrahmen mit Drittellinien. Mehrere Shots speicherbar.
 - **Licht:** Morgen, Mittag, Abend, Nacht, Studio; Sonne und Umgebung manuell; Schatten ein/aus.
-- **Text:** Szene auf Deutsch beschreiben, zum Beispiel `zwei Personen stehen sich gegenüber, links ein Tisch, Kamera halbnah, Abendlicht`. Ein lokaler Parser ohne API-Schlüssel setzt Figuren, Objekte, Pose, Einstellung und Licht. Danach manuell korrigieren. Beschriebene Figuren und Objekte ersetzen die aktuelle Bühne.
+- **Text:** Szene auf Deutsch beschreiben, zum Beispiel `zwei Personen stehen sich gegenüber, links ein Tisch, Kamera halbnah, Abendlicht`. Satzteile werden an Kommas, „und“ und „eine andere“ getrennt. Unterstützt werden Mengen („zwei Personen und ein Tisch“), Richtungen je Objekt, Posen je Person, Verneinungen („kein Auto“, „ohne …“) sowie Brennweiten wie „85 mm“. Ein lokaler Parser ohne API-Schlüssel setzt Figuren, Objekte, Pose, Einstellung und Licht. Danach manuell korrigieren. Beschriebene Figuren und Objekte ersetzen die aktuelle Bühne.
 - **Export:** PNG der Shot-Kamera in Farbe, Graustufen oder Tiefe, Teilen oder Download. Szene als JSON speichern und laden. Autosave im Browser (`localStorage`).
 - Oben: Rückgängig und Wiederholen.
 
@@ -33,6 +33,8 @@ Reine Client-App, keine Server-Logik, kein CDN. Bibliothek: [three.js](https://g
 
 ```bash
 npm install
-npx playwright install chromium webkit
+npx playwright install chromium
 npx playwright test
 ```
+
+Die Suite läuft in Chromium. WebKit ist auf manchen Hosts wegen fehlender Systembibliotheken nicht startbar.

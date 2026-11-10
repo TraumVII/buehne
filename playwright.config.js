@@ -21,7 +21,7 @@ export default defineConfig({
     timeout: 15000
   },
   projects: [
-    { name: 'chromium', use: { browserName: 'chromium' } },
-    { name: 'webkit', use: { browserName: 'webkit' } }
+    { name: 'chromium', use: { browserName: 'chromium' } }
+    // WebKit bleibt im Code, startet auf diesem Host aber nicht (fehlende Systembibliotheken).
   ]
 });

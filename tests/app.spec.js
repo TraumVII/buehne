@@ -102,5 +102,170 @@ test.describe('Bühne', () => {
     });
     await page.waitForTimeout(600);
     await page.screenshot({ path: path.join(screenshotDir, '03-text-prompt.png'), fullPage: true });
+
+    await page.setViewportSize({ width: 874, height: 402 });
+    await page.evaluate(() => {
+      window.Buehne.setThroughShot(false);
+      window.Buehne.parse('eine Person steht, links ein Tisch, rechts ein Stuhl, hinten ein Baum, Kamera amerikanisch, Mittag');
+      window.Buehne.setWorkView([5.4, 3.1, 5.9], [0, 0.85, 0]);
+    });
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: path.join(screenshotDir, '04-querformat.png'), fullPage: true });
+    await page.evaluate(() => window.Buehne.setThroughShot(true));
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(screenshotDir, '05-querformat-shot.png'), fullPage: true });
+  });
+
+  test('ungültiger JSON-Import lässt die Szene unverändert', async ({ page }) => {
+    await page.goto('/');
+    await waitReady(page);
+    await page.evaluate(() => {
+      window.Buehne.newScene();
+      window.Buehne.insert('figure');
+    });
+    const before = await page.evaluate(() => window.Buehne.getState());
+    const result = await page.evaluate(() => window.Buehne.loadJSON('{ "nope": true }'));
+    const after = await page.evaluate(() => window.Buehne.getState());
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/gültiges Bühne-Szenenformat|Szenenformat/i);
+    expect(after.itemCount).toBe(before.itemCount);
+    expect(after.items.filter((item) => item.type === 'figure').length).toBe(1);
+    await expect(page.locator('#toast')).toBeVisible();
+    await expect(page.locator('#toast')).toContainText(/gültiges|Szenenformat|JSON/i);
+
+    const badItems = await page.evaluate(() => window.Buehne.loadJSON(JSON.stringify({
+      version: 1,
+      items: [{ type: 'spaceship', position: [0, 0, 0] }]
+    })));
+    expect(badItems.ok).toBe(false);
+    const still = await page.evaluate(() => window.Buehne.getState());
+    expect(still.items.filter((item) => item.type === 'figure').length).toBe(1);
+  });
+
+  test('Parser: Mengen, Verneinung, Richtungen, Brennweite und getrennte Personen', async ({ page }) => {
+    await page.goto('/');
+    await waitReady(page);
+
+    const counts = await page.evaluate(() => window.Buehne.parse('zwei Personen und ein Tisch'));
+    expect(counts.figures.count).toBe(2);
+    expect(counts.objects).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'table', count: 1 })
+    ]));
+    let state = await page.evaluate(() => window.Buehne.getState());
+    expect(state.items.filter((item) => item.type === 'figure').length).toBe(2);
+    expect(state.items.filter((item) => item.type === 'table').length).toBe(1);
+
+    const negated = await page.evaluate(() => window.Buehne.parse('eine Person und kein Auto'));
+    expect(negated.figures.count).toBe(1);
+    expect(negated.objects.some((item) => item.type === 'car')).toBeFalsy();
+    state = await page.evaluate(() => window.Buehne.getState());
+    expect(state.items.filter((item) => item.type === 'figure').length).toBe(1);
+    expect(state.items.filter((item) => item.type === 'car').length).toBe(0);
+
+    const without = await page.evaluate(() => window.Buehne.parse('eine Person ohne Auto'));
+    expect(without.figures.count).toBe(1);
+    expect(without.objects.some((item) => item.type === 'car')).toBeFalsy();
+
+    const placed = await page.evaluate(() => window.Buehne.parse('ein Tisch links, ein Stuhl rechts'));
+    const table = placed.objects.find((item) => item.type === 'table');
+    const chair = placed.objects.find((item) => item.type === 'chair');
+    expect(table.position.x).toBeLessThan(0);
+    expect(chair.position.x).toBeGreaterThan(0);
+    state = await page.evaluate(() => window.Buehne.getState());
+    expect(state.items.find((item) => item.type === 'table').position[0]).toBeLessThan(0);
+    expect(state.items.find((item) => item.type === 'chair').position[0]).toBeGreaterThan(0);
+
+    const mmSpace = await page.evaluate(() => window.Buehne.parse('Kamera 85 mm'));
+    expect(mmSpace.camera.focalLength).toBe(85);
+    state = await page.evaluate(() => window.Buehne.getState());
+    expect(state.focalLength).toBe(85);
+
+    const mmTight = await page.evaluate(() => window.Buehne.parse('85mm'));
+    expect(mmTight.camera.focalLength).toBe(85);
+
+    const people = await page.evaluate(() => window.Buehne.parse('eine Person sitzt links, eine andere steht rechts'));
+    expect(people.figures.count).toBe(2);
+    expect(people.figures.specs[0].pose).toBe('sitzen');
+    expect(people.figures.specs[0].position.key).toMatch(/links/);
+    expect(people.figures.specs[1].pose).toBe('stehen');
+    expect(people.figures.specs[1].position.key).toMatch(/rechts/);
+    state = await page.evaluate(() => window.Buehne.getState());
+    const figures = state.items.filter((item) => item.type === 'figure');
+    expect(figures).toHaveLength(2);
+    const sitting = figures.find((item) => item.pose === 'sitzen');
+    const standing = figures.find((item) => item.pose === 'stehen');
+    expect(sitting.position[0]).toBeLessThan(0);
+    expect(standing.position[0]).toBeGreaterThan(0);
+  });
+
+  test('Shot-Beschriftung aktualisiert sich nach Akt.', async ({ page }) => {
+    await page.goto('/');
+    await waitReady(page);
+    await page.evaluate(() => {
+      window.Buehne.newScene();
+      window.Buehne.setAspect('16:9');
+      window.Buehne.setFocalLength(35);
+    });
+    await page.getByRole('tab', { name: 'Kamera' }).click();
+    await page.evaluate(() => window.Buehne.saveShot('Einstellung 1'));
+    await expect(page.locator('#shot-list')).toContainText('35 mm');
+    await page.evaluate(() => {
+      window.Buehne.setFocalLength(85);
+      window.Buehne.setAspect('9:16');
+      const id = window.Buehne.getState().shots[0].id;
+      window.Buehne.overwriteShot(id);
+    });
+    await expect(page.locator('#shot-list')).toContainText('85 mm');
+    await expect(page.locator('#shot-list')).toContainText('9:16');
+  });
+
+  test('Undo stellt das Seitenverhältnis wieder her', async ({ page }) => {
+    await page.goto('/');
+    await waitReady(page);
+    await page.evaluate(() => {
+      window.Buehne.newScene();
+      window.Buehne.setAspect('16:9');
+    });
+    expect(await page.evaluate(() => window.Buehne.getState().aspect)).toBe('16:9');
+    await page.evaluate(() => window.Buehne.setAspect('9:16'));
+    expect(await page.evaluate(() => window.Buehne.getState().aspect)).toBe('9:16');
+    await page.evaluate(() => window.Buehne.undo());
+    expect(await page.evaluate(() => window.Buehne.getState().aspect)).toBe('16:9');
+  });
+});
+
+test.describe('Querformat', () => {
+  test.use({ viewport: { width: 874, height: 402 } });
+
+  test('Bühne nutzt den freien Bereich und Tap wählt aus', async ({ page }) => {
+    await page.goto('/');
+    await waitReady(page);
+    await page.waitForTimeout(400);
+    const info = await page.evaluate(() => window.Buehne.getLayoutInfo());
+    expect(info.layout).toBe('landscape');
+    expect(info.visibleRect.w).toBeGreaterThan(280);
+    expect(info.visibleRect.h).toBeGreaterThan(180);
+    expect(info.sheet).toBeTruthy();
+    expect(info.visibleRect.x + info.visibleRect.w).toBeLessThanOrEqual(info.sheet.left - info.canvas.left + 1);
+
+    const id = await page.evaluate(() => {
+      window.Buehne.newScene();
+      const cubeId = window.Buehne.insert('cube');
+      window.Buehne.clearSelection();
+      window.Buehne.setWorkView([0, 1.2, 3.6], [0, 0.3, 0]);
+      return cubeId;
+    });
+    await page.waitForTimeout(400);
+    const click = await page.evaluate(() => {
+      const layout = window.Buehne.getLayoutInfo();
+      return {
+        x: layout.canvas.left + layout.visibleRect.x + layout.visibleRect.w / 2,
+        y: layout.canvas.top + layout.visibleRect.y + layout.visibleRect.h / 2
+      };
+    });
+    await page.mouse.click(click.x, click.y);
+    await page.waitForTimeout(250);
+    const state = await page.evaluate(() => window.Buehne.getState());
+    expect(state.selectedId).toBe(id);
   });
 });

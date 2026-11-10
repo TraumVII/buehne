@@ -30,6 +30,8 @@ const PERSON_PLURAL = new Set([
   'personen', 'figuren', 'menschen', 'leute', 'leuten', 'maenner', 'frauen'
 ]);
 
+const NEGATION = new Set(['kein', 'keine', 'keinen', 'keinem', 'keiner', 'keines', 'ohne', 'nicht']);
+
 const POSE_WORDS = {
   stehen: 'stehen', steht: 'stehen', stehend: 'stehen', stand: 'stehen',
   gehen: 'gehen', geht: 'gehen', gehend: 'gehen', laufen: 'gehen', laeuft: 'gehen',
@@ -62,13 +64,25 @@ function normalize(text) {
     .replace(/ö/g, 'oe')
     .replace(/ü/g, 'ue')
     .replace(/ß/g, 'ss')
-    .replace(/[:.,;!?/\\|]+/g, ' ')
+    .replace(/[.:;!?/\\|]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 function tokenize(normalized) {
   return normalized.split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+function splitClauses(normalized) {
+  return normalized
+    .replace(/\beine andere\b/g, '||| eine person')
+    .replace(/\bein anderer\b/g, '||| eine person')
+    .replace(/\bein anderes\b/g, '||| eine person')
+    .replace(/\bsowie\b/g, '|||')
+    .replace(/\s+und\s+/g, '|||')
+    .split(/,|\|\|\|/)
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 function parseCountToken(token) {
@@ -78,10 +92,6 @@ function parseCountToken(token) {
     if (n >= 1 && n <= 12) return n;
   }
   return null;
-}
-
-function windowOf(tokens, index, before = 4, after = 3) {
-  return tokens.slice(Math.max(0, index - before), Math.min(tokens.length, index + after + 1));
 }
 
 function findCount(words, pluralDefault) {
@@ -108,6 +118,10 @@ function findPosition(words) {
   if (back) { z = -1.75; labels.push('hinten'); }
   if (mid && labels.length === 0) labels.push('mitte');
   return { key: labels.join(' ') || 'mitte', x, z };
+}
+
+function hasNegationBefore(tokens, index) {
+  return tokens.slice(0, index).some((token) => NEGATION.has(token));
 }
 
 function detectAspect(normalized) {
@@ -143,6 +157,13 @@ function detectShot(tokens, normalized) {
   return null;
 }
 
+function detectFocalLength(normalized) {
+  const match = normalized.match(/\b(\d{2,3})\s*mm\b/);
+  if (!match) return null;
+  const value = parseInt(match[1], 10);
+  return value >= 14 && value <= 200 ? value : null;
+}
+
 function detectRoom(normalized) {
   if (/(ohne raum|kein raum|draussen|draußen|aussen|open air)/.test(normalized)) return false;
   if (/(im raum|innenraum|zimmer|innen|waende|wände)/.test(normalized)) return true;
@@ -156,67 +177,81 @@ function detectFormation(normalized, count) {
   return count >= 2 ? 'reihe' : 'einzeln';
 }
 
+function parseClause(clause) {
+  const tokens = tokenize(clause);
+  const figures = [];
+  const objects = [];
+  const usedObjectIndexes = new Set();
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (!PERSON_WORDS.has(token)) continue;
+    if (hasNegationBefore(tokens, i)) continue;
+    const count = findCount(tokens, PERSON_PLURAL.has(token) || token === 'leute');
+    const pose = detectPose(tokens) || 'stehen';
+    const position = findPosition(tokens) || { key: 'mitte', x: 0, z: 0 };
+    for (let n = 0; n < Math.min(count, 8); n += 1) {
+      figures.push({ pose: POSE_KEYS.includes(pose) ? pose : 'stehen', position });
+    }
+  }
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    const objectType = OBJECT_WORDS[tokens[i]];
+    if (!objectType || usedObjectIndexes.has(i)) continue;
+    if (hasNegationBefore(tokens, i)) continue;
+    const plural = tokens[i].endsWith('e') || tokens[i].endsWith('en') || tokens[i].endsWith('s');
+    const count = findCount(tokens, plural && tokens.every((word) => parseCountToken(word) == null));
+    const position = findPosition(tokens) || { key: 'mitte', x: 0, z: 0 };
+    objects.push({ type: objectType, count, position });
+    usedObjectIndexes.add(i);
+  }
+
+  return { figures, objects };
+}
+
 export function parseSceneText(text) {
   const original = String(text || '').trim();
   const normalized = normalize(original);
   const tokens = tokenize(normalized);
+  const clauses = splitClauses(normalized);
 
-  let figureCount = 0;
-  let mentionedPeople = false;
+  const figureSpecs = [];
   const objects = [];
+  clauses.forEach((clause) => {
+    const parsed = parseClause(clause);
+    figureSpecs.push(...parsed.figures);
+    objects.push(...parsed.objects);
+  });
 
-  for (let i = 0; i < tokens.length; i += 1) {
-    const token = tokens[i];
-    const nearby = windowOf(tokens, i);
-
-    if (PERSON_WORDS.has(token)) {
-      mentionedPeople = true;
-      const n = findCount(nearby, PERSON_PLURAL.has(token) || token === 'leute');
-      figureCount = Math.max(figureCount, n);
-      continue;
-    }
-
-    const objectType = OBJECT_WORDS[token];
-    if (objectType) {
-      const plural = token.endsWith('e') || token.endsWith('en') || token.endsWith('s');
-      const count = findCount(nearby, plural && !nearby.some((w) => parseCountToken(w) != null));
-      const before = tokens.slice(Math.max(0, i - 4), i);
-      const after = tokens.slice(i + 1, Math.min(tokens.length, i + 2));
-      const position = findPosition(before) || findPosition(after) || { key: 'mitte', x: 0, z: 0 };
-      objects.push({ type: objectType, count, position });
-    }
-  }
-
-  if (!mentionedPeople && /(jemand|leute)/.test(normalized)) {
-    mentionedPeople = true;
-    figureCount = Math.max(figureCount, 2);
-  }
-
-  if (mentionedPeople && figureCount === 0) figureCount = 1;
-  figureCount = Math.min(figureCount, 8);
-
-  const pose = detectPose(tokens) || (mentionedPeople ? 'stehen' : null);
+  const figureCount = Math.min(figureSpecs.length, 8);
+  const limitedSpecs = figureSpecs.slice(0, figureCount);
+  const sharedPose = limitedSpecs[0]?.pose || null;
+  const formation = figureCount ? detectFormation(normalized, figureCount) : 'einzeln';
   const shotSize = detectShot(tokens, normalized);
+  const explicitFocal = detectFocalLength(normalized);
   const aspect = detectAspect(normalized);
   const light = detectLight(normalized);
   const room = detectRoom(normalized);
-  const formation = mentionedPeople ? detectFormation(normalized, figureCount) : 'einzeln';
 
   const camera = {
     shotSize,
-    focalLength: shotSize ? SHOT_FOCAL[shotSize] : null,
+    focalLength: explicitFocal || (shotSize ? SHOT_FOCAL[shotSize] : null),
     aspect: aspect && ASPECTS[aspect] ? aspect : null
   };
 
   const parts = [];
   if (figureCount) {
-    const poseLabel = pose || 'stehen';
-    parts.push(`${figureCount} Figur${figureCount === 1 ? '' : 'en'} (${poseLabel}${formation === 'gegenueber' ? ', gegenüber' : formation === 'reihe' ? ', nebeneinander' : ''})`);
+    const poseBits = limitedSpecs.map((spec) => {
+      const where = spec.position.key !== 'mitte' ? ` ${spec.position.key}` : '';
+      return `${spec.pose}${where}`;
+    });
+    const uniquePoses = [...new Set(poseBits)];
+    parts.push(`${figureCount} Figur${figureCount === 1 ? '' : 'en'} (${uniquePoses.join(', ')}${formation === 'gegenueber' ? ', gegenüber' : ''})`);
   }
   for (const obj of objects) {
     parts.push(`${obj.count} ${obj.type}${obj.position.key !== 'mitte' ? ` ${obj.position.key}` : ''}`);
   }
-  if (camera.focalLength) parts.push(`${camera.focalLength} mm${camera.shotSize ? ` (${camera.shotSize})` : ''}`);
+  if (camera.focalLength) parts.push(`${camera.focalLength} mm${camera.shotSize && !explicitFocal ? ` (${camera.shotSize})` : ''}`);
   if (camera.aspect) parts.push(camera.aspect);
   if (light) parts.push(LIGHT_PRESETS[light]?.label || light);
   if (room === true) parts.push('Raum an');
@@ -224,7 +259,12 @@ export function parseSceneText(text) {
 
   return {
     original,
-    figures: { count: figureCount, pose: pose && POSE_KEYS.includes(pose) ? pose : (figureCount ? 'stehen' : null), formation },
+    figures: {
+      count: figureCount,
+      pose: sharedPose,
+      formation,
+      specs: limitedSpecs
+    },
     objects,
     camera,
     light,
