@@ -109,6 +109,30 @@ export function createStageObject(type, color = '#8a8680') {
       wheel.position.set(sx * 0.58, 0.22, sz * 0.48);
       root.add(wheel);
     });
+  } else if (type === 'rock') {
+    const stone = stdMaterial(color || '#6a655c', { roughness: 0.92 });
+    const boulder = mesh(new THREE.IcosahedronGeometry(0.52, 1), stone, { recolor: true });
+    boulder.position.y = 0.42;
+    boulder.scale.set(1.15, 0.92, 1.05);
+    root.add(boulder);
+    const cap = mesh(new THREE.IcosahedronGeometry(0.28, 0), stone, { recolor: true });
+    cap.position.set(0.18, 0.55, -0.06);
+    cap.scale.set(1.1, 0.7, 0.9);
+    root.add(cap);
+  } else if (type === 'house') {
+    const wall = stdMaterial(color || '#c4b7a4', { roughness: 0.86 });
+    const roofMat = stdMaterial('#6a3a32', { roughness: 0.78 });
+    const dark = stdMaterial('#4a4036');
+    addBox(root, 2.6, 2.15, 2.2, 0, 1.075, 0, wall, { recolor: true });
+    const roof = mesh(new THREE.ConeGeometry(1.95, 1.1, 4), roofMat);
+    roof.rotation.y = Math.PI / 4;
+    roof.position.y = 2.7;
+    root.add(roof);
+    addBox(root, 0.42, 0.95, 0.08, 0, 0.48, 1.12, dark);
+    addBox(root, 0.36, 0.36, 0.06, 0.72, 1.45, 1.12, stdMaterial('#9ec6d4', { transparent: true, opacity: 0.45 }));
+  } else if (type === 'library') {
+    const placeholder = addBox(root, 0.36, 0.36, 0.36, 0, 0.18, 0, main, { recolor: true });
+    placeholder.userData.placeholder = true;
   } else if (type === 'pointlight') {
     const light = new THREE.PointLight(color, 1.7, 14, 1.4);
     light.castShadow = true;
@@ -187,5 +211,57 @@ export const DEFAULT_OBJECT_COLORS = {
   tree: '#3f6b3a',
   car: '#4d6d8b',
   pointlight: '#ffe6b0',
-  spotlight: '#fff1c8'
+  spotlight: '#fff1c8',
+  rock: '#6a655c',
+  house: '#c4b7a4',
+  library: '#8a8680'
 };
+
+export const NATIVE_HEIGHTS = {
+  figure: 1.8,
+  cube: 0.6,
+  sphere: 0.68,
+  cylinder: 0.72,
+  cone: 0.74,
+  plane: 0.045,
+  table: 0.77,
+  chair: 0.99,
+  door: 2.14,
+  window: 1.99,
+  tree: 2.1,
+  car: 0.96,
+  rock: 0.95,
+  house: 3.25,
+  library: 1,
+  pointlight: 0.18,
+  spotlight: 0.18
+};
+
+export const SUPPORT_TOP = {
+  rock: 0.95,
+  house: 2.2,
+  table: 0.77,
+  car: 0.96,
+  cube: 0.6,
+  chair: 0.45
+};
+
+export function getNativeHeight(type, assetHeight = null) {
+  if (type === 'library' && assetHeight) return assetHeight;
+  return NATIVE_HEIGHTS[type] || 1;
+}
+
+export function getObjectHeight(item) {
+  const native = item.nativeHeight || getNativeHeight(item.type);
+  return native * (item.group?.scale.y ?? 1);
+}
+
+export function getSupportTop(item) {
+  if (!item) return 0;
+  const key = item.type;
+  const top = SUPPORT_TOP[key];
+  const base = item.group?.position.y ?? 0;
+  const scaleY = item.group?.scale.y ?? 1;
+  if (top != null) return base + top * scaleY;
+  return base + getObjectHeight(item);
+}

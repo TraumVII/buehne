@@ -314,7 +314,7 @@ test.describe('Querformat', () => {
     await page.goto('/');
     await waitReady(page);
     await page.waitForTimeout(300);
-    const names = ['Einfügen', 'Bearbeiten', 'Kamera', 'Licht', 'Text', 'Export'];
+    const names = ['Einfügen', 'Bearbeiten', 'Kamera', 'Licht', 'Welt', 'Text', 'Export'];
     for (const name of names) {
       const tab = page.getByRole('tab', { name, exact: true });
       await expect(tab).toBeVisible();
@@ -413,5 +413,148 @@ test.describe('Spracheingabe', () => {
     await page.getByRole('button', { name: /Sprechen|Spracheingabe/ }).click();
     await expect(page.locator('#speech-status')).toBeVisible();
     await expect(page.locator('#speech-status')).toContainText(/nicht unterstützt|Tastatur|iOS|iPhone/i);
+  });
+});
+
+
+test.describe('Welt, Größen und Bibliothek', () => {
+  test('Parser erkennt Landschaft, Himmel, Größe, Stapelung und Kamerahöhe', async ({ page }) => {
+    await page.goto('/');
+    await waitReady(page);
+
+    const forest = await page.evaluate(() => window.Buehne.parse('Wald bei Nacht, Vollmond und Nebel'));
+    expect(forest.environment).toBe('wald');
+    expect(forest.light).toBe('nacht');
+    expect(forest.sky.weather).toBe('nebel');
+    expect(forest.sky.moonPhase).toBe('vollmond');
+    let state = await page.evaluate(() => window.Buehne.getState());
+    expect(state.environment).toBe('wald');
+    expect(state.lightPreset).toBe('nacht');
+    expect(state.sky.weather).toBe('nebel');
+    expect(state.sky.moonPhase).toBe('vollmond');
+
+    const tree = await page.evaluate(() => window.Buehne.parse('ein drei Meter hoher Baum'));
+    expect(tree.objects.some((item) => item.type === 'tree' && item.heightMeters === 3)).toBeTruthy();
+    state = await page.evaluate(() => window.Buehne.getState());
+    const planted = state.items.find((item) => item.type === 'tree');
+    expect(planted).toBeTruthy();
+    expect(planted.scale[1]).toBeCloseTo(3 / 2.1, 1);
+    expect(planted.height).toBeCloseTo(3, 1);
+
+    const stacked = await page.evaluate(() => window.Buehne.parse('eine Person steht auf dem Felsen'));
+    expect(stacked.figures.specs[0].onTopOf).toBe('rock');
+    expect(stacked.objects.some((item) => item.type === 'rock')).toBeTruthy();
+    state = await page.evaluate(() => window.Buehne.getState());
+    const figure = state.items.find((item) => item.type === 'figure');
+    const rock = state.items.find((item) => item.type === 'rock');
+    expect(figure).toBeTruthy();
+    expect(rock).toBeTruthy();
+    expect(figure.position[1]).toBeGreaterThan(0.7);
+
+    const cam = await page.evaluate(() => window.Buehne.parse('Kamera auf 10 Meter Höhe'));
+    expect(cam.camera.heightMeters).toBe(10);
+    state = await page.evaluate(() => window.Buehne.getState());
+    expect(state.shotHeight).toBeCloseTo(10, 1);
+
+    const drone = await page.evaluate(() => window.Buehne.parse('Berge, Drohne'));
+    expect(drone.environment).toBe('berge');
+    expect(drone.camera.heightStyle).toBe('drohne');
+    state = await page.evaluate(() => window.Buehne.getState());
+    expect(state.environment).toBe('berge');
+    expect(state.shotHeight).toBeGreaterThan(12);
+
+    const frog = await page.evaluate(() => window.Buehne.parse('Froschperspektive'));
+    expect(frog.camera.heightStyle).toBe('frosch');
+    state = await page.evaluate(() => window.Buehne.getState());
+    expect(state.shotHeight).toBeLessThan(0.5);
+  });
+
+  test('alte JSON-Szenen bleiben ladbar und Undo stellt die Landschaft wieder her', async ({ page }) => {
+    await page.goto('/');
+    await waitReady(page);
+    const loaded = await page.evaluate(() => window.Buehne.loadJSON(JSON.stringify({
+      version: 1,
+      items: [{ type: 'figure', position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] }]
+    })));
+    expect(loaded.ok).toBe(true);
+    let state = await page.evaluate(() => window.Buehne.getState());
+    expect(state.items.filter((item) => item.type === 'figure')).toHaveLength(1);
+    expect(state.environment).toBe('none');
+
+    await page.evaluate(() => {
+      window.Buehne.newScene();
+      window.Buehne.setEnvironment('wueste');
+    });
+    expect(await page.evaluate(() => window.Buehne.getState().environment)).toBe('wueste');
+    await page.evaluate(() => window.Buehne.setEnvironment('wald'));
+    expect(await page.evaluate(() => window.Buehne.getState().environment)).toBe('wald');
+    await page.evaluate(() => window.Buehne.undo());
+    expect(await page.evaluate(() => window.Buehne.getState().environment)).toBe('wueste');
+  });
+
+  test('Objektbibliothek filtert per Suche', async ({ page }) => {
+    await page.goto('/');
+    await waitReady(page);
+    await page.getByRole('tab', { name: 'Einfügen' }).click();
+    await expect(page.locator('#library-search')).toBeVisible();
+    await page.locator('#library-search').fill('Baum');
+    await expect(page.locator('#library-results')).toContainText(/Eiche|Kiefer|Palme|Laubbaum/);
+    await expect(page.locator('#library-results')).not.toContainText('Sofa');
+    const hits = await page.evaluate(() => window.Buehne.searchLibrary('Stuhl').map((item) => item.name));
+    expect(hits.some((name) => /Stuhl/i.test(name))).toBeTruthy();
+  });
+
+  test('Wald bleibt für das iPhone leicht genug', async ({ page }) => {
+    await page.goto('/');
+    await waitReady(page);
+    await page.evaluate(() => {
+      window.Buehne.newScene();
+      window.Buehne.parse('Wald bei Nacht, Vollmond und Nebel');
+    });
+    await page.waitForTimeout(400);
+    const info = await page.evaluate(() => window.Buehne.getPerformanceInfo());
+    expect(info.drawCalls).toBeLessThan(90);
+  });
+
+  test('Screenshots Nachtwald, Wüste, Berge und Bibliothekssuche', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'Screenshots nur einmal über Chromium');
+    await page.goto('/');
+    await waitReady(page);
+
+    await page.evaluate(() => {
+      window.Buehne.newScene();
+      window.Buehne.parse('Wald bei Nacht, Vollmond und Nebel');
+      window.Buehne.setWorkView([12.5, 3.1, 14.5], [0, 2.4, -2]);
+    });
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: path.join(screenshotDir, '08-nachtwald.png'), fullPage: true });
+
+    await page.evaluate(() => {
+      window.Buehne.parse('Wüste bei Sonnenuntergang');
+      window.Buehne.setWorkView([16, 2.3, 5.5], [0, 1.35, -3]);
+    });
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: path.join(screenshotDir, '09-wueste-abend.png'), fullPage: true });
+
+    await page.evaluate(() => {
+      window.Buehne.parse('Berge, Drohne, Mittag');
+      window.Buehne.setShotView([0, 18, 48], [0, 4.5, -6]);
+      window.Buehne.setThroughShot(true);
+    });
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: path.join(screenshotDir, '10-berge-drohne.png'), fullPage: true });
+
+    await page.evaluate(() => window.Buehne.setThroughShot(false));
+    await page.getByRole('tab', { name: 'Einfügen' }).click();
+    await page.locator('#library-search').fill('Baum');
+    await page.evaluate(() => {
+      const panels = document.getElementById('panels');
+      const results = document.getElementById('library-results');
+      if (!panels || !results) return;
+      const delta = results.getBoundingClientRect().top - panels.getBoundingClientRect().top;
+      panels.scrollTop += delta - 90;
+    });
+    await page.waitForTimeout(350);
+    await page.screenshot({ path: path.join(screenshotDir, '11-bibliothek-suche.png'), fullPage: true });
   });
 });

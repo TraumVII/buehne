@@ -25,11 +25,23 @@ import {
   DEFAULT_OBJECT_COLORS,
   createStageObject,
   disposeObject3D,
+  getNativeHeight,
+  getObjectHeight,
+  getSupportTop,
   setRecolor
 } from './objects.js';
 import { parseSceneText } from './parser.js';
 import { captureCanvas, resolutionFromLongEdge, shareOrDownload } from './export.js';
 import { validateAndNormalizeScene } from './schema.js';
+import { EnvironmentWorld } from './environments.js';
+import {
+  Atmosphere,
+  DEFAULT_SKY,
+  lightingFromSky,
+  presetFromHour,
+  sunFromHour
+} from './atmosphere.js';
+import { getLibraryItem, loadLibraryModel } from './library.js';
 
 export class BuehneApp {
   constructor(canvas, overlay) {
@@ -63,6 +75,9 @@ export class BuehneApp {
     this._lastFrameRect = { x: 0, y: 0, w: 100, h: 100 };
     this._lastRenderRect = { x: 0, y: 0, w: 100, h: 100 };
     this._nameCounts = {};
+    this.environmentId = 'none';
+    this.skyState = structuredClone(DEFAULT_SKY);
+    this._lastTick = 0;
   }
 
   init() {
@@ -195,15 +210,23 @@ export class BuehneApp {
     this.sun = new THREE.DirectionalLight(this.lights.sun.color, this.lights.sun.intensity);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(1024, 1024);
-    this.sun.shadow.camera.left = -9;
-    this.sun.shadow.camera.right = 9;
-    this.sun.shadow.camera.top = 9;
-    this.sun.shadow.camera.bottom = -9;
+    this.sun.shadow.camera.left = -18;
+    this.sun.shadow.camera.right = 18;
+    this.sun.shadow.camera.top = 18;
+    this.sun.shadow.camera.bottom = -18;
     this.sun.shadow.camera.near = 1;
-    this.sun.shadow.camera.far = 40;
+    this.sun.shadow.camera.far = 70;
     this.sun.shadow.bias = -0.0008;
     this.scene.add(this.sun);
     this.scene.add(this.sun.target);
+
+    this.moonLight = new THREE.DirectionalLight(0xc5d4f0, 0);
+    this.moonLight.castShadow = false;
+    this.scene.add(this.moonLight);
+    this.scene.add(this.moonLight.target);
+
+    this.atmosphere = new Atmosphere(this.scene);
+    this.environment = new EnvironmentWorld(this.scene);
     this._syncSun();
 
     this.shotHelper = this._createShotHelper();
@@ -234,11 +257,11 @@ export class BuehneApp {
   }
 
   _setupCameras() {
-    this.workCamera = new THREE.PerspectiveCamera(50, 1, 0.12, 80);
+    this.workCamera = new THREE.PerspectiveCamera(50, 1, 0.12, 900);
     this.workCamera.position.set(5.4, 3.3, 6.4);
     this.workTarget = new THREE.Vector3(0, 0.7, 0);
 
-    this.shotCamera = new THREE.PerspectiveCamera(35, ASPECTS[this.aspectKey], 0.15, 60);
+    this.shotCamera = new THREE.PerspectiveCamera(35, ASPECTS[this.aspectKey], 0.15, 800);
     this.shotCamera.position.set(0.35, 1.52, 4.9);
     this.shotTarget = new THREE.Vector3(0, 1.18, 0);
     this.shotCamera.lookAt(this.shotTarget);
@@ -251,7 +274,7 @@ export class BuehneApp {
     this.orbit.enableDamping = true;
     this.orbit.dampingFactor = 0.08;
     this.orbit.minDistance = 0.6;
-    this.orbit.maxDistance = 24;
+    this.orbit.maxDistance = 90;
     this.orbit.maxPolarAngle = Math.PI * 0.49;
     this.orbit.update();
 
@@ -308,6 +331,10 @@ export class BuehneApp {
 
   _loop() {
     const tick = () => {
+      const now = performance.now();
+      const dt = this._lastTick ? Math.min(0.05, (now - this._lastTick) / 1000) : 0.016;
+      this._lastTick = now;
+      this.atmosphere?.tick(dt);
       this.orbit.update();
       if (this.throughShot) {
         this.shotTarget.copy(this.orbit.target);
@@ -469,19 +496,38 @@ export class BuehneApp {
     const { azimuth, elevation, intensity, color } = this.lights.sun;
     const az = THREE.MathUtils.degToRad(azimuth);
     const el = THREE.MathUtils.degToRad(elevation);
+    const sunDist = this.environmentId === 'none' ? 14 : 28;
     this.sun.position.set(
-      Math.sin(az) * Math.cos(el) * 14,
-      Math.sin(el) * 14,
-      Math.cos(az) * Math.cos(el) * 14
+      Math.sin(az) * Math.cos(el) * sunDist,
+      Math.sin(el) * sunDist,
+      Math.cos(az) * Math.cos(el) * sunDist
     );
     this.sun.intensity = intensity;
     this.sun.color.set(color);
-    this.sun.castShadow = this.lights.shadows;
+    this.sun.castShadow = this.lights.shadows && elevation > 2;
     this.sun.target.position.set(0, 0, 0);
     this.sun.target.updateMatrixWorld();
     this.ambient.intensity = this.lights.ambient.intensity;
     this.ambient.color.set(this.lights.ambient.color);
     this.renderer.shadowMap.enabled = this.lights.shadows;
+    if (this.atmosphere) {
+      this.atmosphere.setEnclosed(this.environmentId === 'hoehle');
+      const info = this.atmosphere.apply(this.skyState, azimuth, elevation, { environmentId: this.environmentId });
+      if (this.moonLight) {
+        const moonAz = THREE.MathUtils.degToRad(info.moonAzimuth);
+        const moonEl = THREE.MathUtils.degToRad(info.moonElevation);
+        this.moonLight.position.set(
+          Math.sin(moonAz) * Math.cos(moonEl) * 20,
+          Math.sin(moonEl) * 20,
+          Math.cos(moonAz) * Math.cos(moonEl) * 20
+        );
+        this.moonLight.intensity = info.moon.intensity;
+        this.moonLight.color.set(info.moon.color);
+        this.moonLight.target.position.set(0, 0, 0);
+        this.moonLight.target.updateMatrixWorld();
+      }
+      if (info.exposure != null) this.renderer.toneMappingExposure = info.exposure;
+    }
   }
 
   _nextName(type) {
@@ -503,11 +549,12 @@ export class BuehneApp {
       ? FIGURE_COLORS[this.items.size % FIGURE_COLORS.length]
       : (options.color || DEFAULT_OBJECT_COLORS[type] || '#888888');
     const created = createStageObject(type, palette);
+    const asset = options.assetId ? getLibraryItem(options.assetId) : null;
     const item = {
       id: options.id || uid(type),
       type,
       kind: type === 'figure' ? 'figure' : (type === 'pointlight' || type === 'spotlight' ? 'light' : 'object'),
-      name: options.name || this._nextName(type),
+      name: options.name || (asset ? asset.name : this._nextName(type)),
       color: palette,
       group: created.root,
       joints: created.joints || null,
@@ -515,11 +562,15 @@ export class BuehneApp {
       poseOffset: created.poseOffset || null,
       clothMat: created.clothMat || null,
       pose: type === 'figure' ? 'stehen' : null,
-      light: created.root.userData.light || null
+      light: created.root.userData.light || null,
+      assetId: options.assetId || null,
+      nativeHeight: asset?.nativeHeight || getNativeHeight(type),
+      onTopOf: options.onTopOf || null
     };
     item.group.userData.itemId = item.id;
     this.items.set(item.id, item);
     this.world.add(item.group);
+    if (type === 'library' && item.assetId) this._attachLibraryModel(item);
     if (!options.skipPlace) this._placeNewItem(item);
     if (!options.skipSelect) this.select(item.id);
     if (!options.skipCommit) {
@@ -529,11 +580,34 @@ export class BuehneApp {
     return item;
   }
 
+  insertLibrary(assetId, options = {}) {
+    return this.insert('library', { ...options, assetId });
+  }
+
+  async _attachLibraryModel(item) {
+    try {
+      const { model, asset } = await loadLibraryModel(item.assetId);
+      item.nativeHeight = asset.nativeHeight || item.nativeHeight;
+      const leftovers = [...item.group.children];
+      leftovers.forEach((child) => {
+        if (child.userData.placeholder) {
+          item.group.remove(child);
+          disposeObject3D(child);
+        }
+      });
+      item.group.add(model);
+      this.emitChange();
+    } catch (error) {
+      console.warn('Bibliotheksobjekt konnte nicht geladen werden', error);
+    }
+  }
+
   _placeNewItem(item) {
     const target = this.throughShot ? this.shotTarget : this.orbit.target;
     const pos = new THREE.Vector3(target.x, item.group.position.y, target.z);
-    pos.x = clamp(pos.x, -7, 7);
-    pos.z = clamp(pos.z, -7, 7);
+    const span = this.environmentId === 'none' ? 7 : 18;
+    pos.x = clamp(pos.x, -span, span);
+    pos.z = clamp(pos.z, -span, span);
     for (let i = 0; i < 10; i += 1) {
       const blocked = [...this.items.values()].some((other) => {
         if (other.id === item.id) return false;
@@ -547,6 +621,94 @@ export class BuehneApp {
     }
     item.group.position.x = pos.x;
     item.group.position.z = pos.z;
+    this._groundItem(item);
+  }
+
+  _groundItem(item) {
+    if (!item || item.kind === 'light') return;
+    const ground = this.environment ? this.environment.getHeight(item.group.position.x, item.group.position.z) : 0;
+    item.group.position.y = ground;
+  }
+
+  _applyItemSize(item, { heightMeters, sizeScale } = {}) {
+    if (!item || item.kind === 'light') return;
+    if (heightMeters != null && heightMeters > 0) {
+      const native = item.nativeHeight || getNativeHeight(item.type);
+      item.group.scale.setScalar(heightMeters / Math.max(0.05, native));
+    } else if (sizeScale != null) {
+      item.group.scale.setScalar(sizeScale);
+    }
+  }
+
+  _stackItem(item, supportType) {
+    if (!item || !supportType) return;
+    let support = [...this.items.values()].find((other) => other.id !== item.id && other.type === supportType);
+    if (!support) {
+      support = this.insert(supportType, { skipCommit: true, skipPlace: true, skipSelect: true });
+      support.group.position.x = item.group.position.x;
+      support.group.position.z = item.group.position.z;
+      this._groundItem(support);
+    }
+    item.group.position.x = support.group.position.x;
+    item.group.position.z = support.group.position.z;
+    item.group.position.y = getSupportTop(support);
+    item.onTopOf = supportType;
+  }
+
+  getNativeHeightForItem(item) {
+    return item?.nativeHeight || getNativeHeight(item?.type);
+  }
+
+  setSelectedSize(value, options = {}) {
+    const item = this.items.get(this.selectedId);
+    if (!item) return;
+    item.group.scale.setScalar(Number(value));
+    this._finishSetting(options);
+  }
+
+  setSelectedHeightMeters(meters, options = {}) {
+    const item = this.items.get(this.selectedId);
+    if (!item) return;
+    this._applyItemSize(item, { heightMeters: Number(meters) });
+    this._finishSetting(options);
+  }
+
+  setEnvironment(id, options = {}) {
+    const next = id || 'none';
+    this.environmentId = next;
+    this.environment.setPreset(next);
+    const showStage = next === 'none' || next === 'innenraum';
+    this.floor.visible = showStage;
+    this.grid.visible = showStage;
+    if (next === 'innenraum') this.roomGroup.visible = true;
+    else if (next !== 'none') this.roomGroup.visible = false;
+    this.atmosphere?.setEnclosed(next === 'hoehle');
+    this.items.forEach((item) => {
+      if (item.onTopOf) return;
+      this._groundItem(item);
+    });
+    this.items.forEach((item) => {
+      if (item.onTopOf) this._stackItem(item, item.onTopOf);
+    });
+    this._syncSun();
+    this._finishSetting(options);
+  }
+
+  setSky(partial = {}, options = {}) {
+    Object.assign(this.skyState, partial);
+    if (partial.hour != null && !options.skipLights) {
+      const sun = sunFromHour(this.skyState.hour);
+      const look = lightingFromSky(this.skyState, sun.elevation);
+      this.lights.sun.azimuth = sun.azimuth;
+      this.lights.sun.elevation = sun.elevation;
+      this.lights.sun.intensity = look.sun.intensity;
+      this.lights.sun.color = look.sun.color;
+      this.lights.ambient.intensity = look.ambient.intensity;
+      this.lights.ambient.color = look.ambient.color;
+      this.currentLightPreset = presetFromHour(this.skyState.hour);
+    }
+    this._syncSun();
+    this._finishSetting(options);
   }
 
   removeSelected(options = {}) {
@@ -790,6 +952,8 @@ export class BuehneApp {
     this.currentLightPreset = name;
     this.lights.ambient = { ...preset.ambient };
     this.lights.sun = { ...preset.sun };
+    const hourMap = { morgen: 7, mittag: 13, abend: 19.15, nacht: 22.6, studio: 13 };
+    if (hourMap[name] != null) this.skyState.hour = hourMap[name];
     this._syncSun();
     if (!options.skipCommit) {
       this.commit();
@@ -846,6 +1010,16 @@ export class BuehneApp {
     this.shots = this.shots.filter((entry) => entry.id !== id);
     this.commit();
     this.emitChange();
+  }
+
+  setShotView(position, target) {
+    this.shotCamera.position.fromArray(position);
+    this.shotTarget.fromArray(target);
+    this.shotCamera.lookAt(this.shotTarget);
+    if (this.throughShot) {
+      this.orbit.target.copy(this.shotTarget);
+      this.orbit.update();
+    }
   }
 
   setWorkView(position, target) {
@@ -915,17 +1089,22 @@ export class BuehneApp {
     const plan = parseSceneText(text);
     const mentions = plan.figures.count > 0 || plan.objects.length > 0;
     if (mentions) this.clearItems({ skipCommit: true });
+    if (plan.environment) this.setEnvironment(plan.environment, { skipCommit: true });
     if (plan.light) this.applyLightPreset(plan.light, { skipCommit: true });
+    if (plan.sky) this.setSky(plan.sky, { skipCommit: true, skipLights: Boolean(plan.light) });
     if (plan.room === true || plan.room === false) this.setRoom(plan.room, { skipCommit: true });
+    if (plan.environment === 'innenraum') this.setRoom(true, { skipCommit: true });
+    else if (plan.environment && plan.environment !== 'none') this.setRoom(false, { skipCommit: true });
 
     const figureIds = [];
     const specs = plan.figures.specs && plan.figures.specs.length
       ? plan.figures.specs
       : Array.from({ length: plan.figures.count }, () => ({ pose: plan.figures.pose, position: { key: 'mitte', x: 0, z: 0 } }));
     specs.forEach((spec) => {
-      const item = this.insert('figure', { skipCommit: true, skipPlace: true, skipSelect: true });
+      const item = this.insert('figure', { skipCommit: true, skipPlace: true, skipSelect: true, onTopOf: spec.onTopOf || null });
       figureIds.push(item.id);
       if (spec.pose) this.applyPose(item.id, spec.pose, { skipCommit: true });
+      this._applyItemSize(item, spec);
     });
     const hasIndividual = specs.some((spec) => spec.position && spec.position.key !== 'mitte');
     if (hasIndividual) {
@@ -946,12 +1125,35 @@ export class BuehneApp {
         else x += spread;
         item.group.position.x = x;
         item.group.position.z = z;
+        this._groundItem(item);
+        this._applyItemSize(item, spec);
       }
+    });
+
+    specs.forEach((spec, index) => {
+      const item = this.items.get(figureIds[index]);
+      if (!item) return;
+      this._groundItem(item);
+      if (spec.onTopOf) this._stackItem(item, spec.onTopOf);
     });
 
     if (plan.camera.focalLength) this.setFocalLength(plan.camera.focalLength, { skipCommit: true });
     if (plan.camera.aspect) this.setAspect(plan.camera.aspect, { skipCommit: true });
-    if (mentions || plan.camera.shotSize) this.frameShotCamera(plan);
+    if (mentions || plan.camera.shotSize || plan.camera.heightMeters != null) this.frameShotCamera(plan);
+    if (plan.camera.heightMeters != null) {
+      if (plan.camera.heightStyle === 'drohne') {
+        this.shotCamera.position.set(22, plan.camera.heightMeters, 30);
+        this.shotTarget.set(0, 3.5, 0);
+        this.shotCamera.lookAt(this.shotTarget);
+        if (this.throughShot) {
+          this.orbit.target.copy(this.shotTarget);
+          this.orbit.update();
+        }
+      } else {
+        this.setShotHeight(plan.camera.heightMeters, { skipCommit: true });
+        if (plan.camera.heightStyle === 'frosch') this.setTargetHeight(0.35, { skipCommit: true });
+      }
+    }
 
     this.lastParse = plan;
     this.commit();
@@ -987,6 +1189,8 @@ export class BuehneApp {
     this.orbit.update();
     this.lights = structuredClone(DEFAULT_LIGHTS);
     this.currentLightPreset = 'mittag';
+    this.skyState = structuredClone(DEFAULT_SKY);
+    this.setEnvironment('none', { skipCommit: true });
     this._syncSun();
     this.roomGroup.visible = false;
     this.lastParse = null;
@@ -1017,6 +1221,8 @@ export class BuehneApp {
       shots: this.shots,
       lights: this.lights,
       currentLightPreset: this.currentLightPreset,
+      environment: this.environmentId,
+      sky: { ...this.skyState },
       showGuides: this.showGuides,
       showGizmo: this.showGizmo,
       transformMode: this.transformMode,
@@ -1044,6 +1250,9 @@ export class BuehneApp {
       scale: item.group.scale.toArray(),
       pose: item.pose
     };
+    if (item.assetId) data.assetId = item.assetId;
+    if (item.onTopOf) data.onTopOf = item.onTopOf;
+    if (item.nativeHeight) data.nativeHeight = item.nativeHeight;
     if (item.joints) data.joints = readJointDegrees(item.joints);
     if (item.poseOffset) data.poseOffset = item.poseOffset.position.toArray();
     if (item.inner) {
@@ -1069,10 +1278,13 @@ export class BuehneApp {
       id: data.id,
       name: data.name,
       color: data.color,
+      assetId: data.assetId,
+      onTopOf: data.onTopOf,
       skipPlace: true,
       skipSelect: true,
       skipCommit: true
     });
+    if (data.nativeHeight) item.nativeHeight = data.nativeHeight;
     item.name = data.name;
     item.color = data.color;
     if (item.clothMat) item.clothMat.color.set(data.color);
@@ -1117,6 +1329,9 @@ export class BuehneApp {
       shadows: data.lights?.shadows !== false
     };
     this.currentLightPreset = data.currentLightPreset || this.currentLightPreset;
+    this.skyState = { ...DEFAULT_SKY, ...(data.sky || {}) };
+    const envId = typeof data.environment === 'string' ? data.environment : (data.environment?.id || 'none');
+    this.setEnvironment(envId, { skipCommit: true });
     this._syncSun();
 
     (data.items || []).forEach((itemData) => this._spawnFromData(itemData));
@@ -1207,6 +1422,7 @@ export class BuehneApp {
         child.visible = false;
       }
     });
+    const prevGrid = this.grid.visible;
     this.grid.visible = false;
     this.shotHelper.visible = false;
     const helper = this.transform.getHelper();
@@ -1241,6 +1457,7 @@ export class BuehneApp {
     } finally {
       hiddenHelpers.forEach((child) => { child.visible = true; });
       helper.visible = prevHelper;
+      this.grid.visible = prevGrid;
       this._exporting = false;
       this.resize();
       this._updateShotHelper();
@@ -1365,6 +1582,9 @@ export class BuehneApp {
         kind: item.kind,
         name: item.name,
         position: item.group.position.toArray(),
+        scale: item.group.scale.toArray(),
+        height: getObjectHeight(item),
+        assetId: item.assetId || null,
         pose: item.pose
       })),
       selectedId: this.selectedId,
@@ -1373,6 +1593,9 @@ export class BuehneApp {
       aspect: this.aspectKey,
       room: this.roomGroup.visible,
       lightPreset: this.currentLightPreset,
+      environment: this.environmentId,
+      sky: { ...this.skyState },
+      shotHeight: this.shotCamera.position.y,
       canUndo: this.history.canUndo(),
       canRedo: this.history.canRedo(),
       lastParse: this.lastParse,
@@ -1417,7 +1640,10 @@ export class BuehneApp {
         joints,
         currentJoint: this.currentJoint,
         joint: joints?.[this.currentJoint] || [0, 0, 0],
-        lightIntensity: item.light ? item.light.intensity : null
+        lightIntensity: item.light ? item.light.intensity : null,
+        heightMeters: getObjectHeight(item),
+        nativeHeight: item.nativeHeight || getNativeHeight(item.type),
+        assetId: item.assetId || null
       } : null,
       itemCount: this.items.size,
       room: this.roomGroup.visible,
@@ -1433,11 +1659,23 @@ export class BuehneApp {
       shots: this.shots,
       lights: this.lights,
       currentLightPreset: this.currentLightPreset,
+      environment: this.environmentId,
+      sky: { ...this.skyState },
       canUndo: this.history.canUndo(),
       canRedo: this.history.canRedo(),
       lastParse: this.lastParse,
       lastError: this.lastError,
       storageError: this.storageError
+    };
+  }
+
+  getPerformanceInfo() {
+    const info = this.renderer.info.render;
+    return {
+      drawCalls: info.calls,
+      triangles: info.triangles,
+      points: info.points,
+      lines: info.lines
     };
   }
 }

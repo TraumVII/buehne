@@ -2,6 +2,8 @@
 
 Diese Liste wird aus denselben Parser-Daten erzeugt, die die App zum Verstehen von Szenenbeschreibungen nutzt.
 
+Deutsche Synonyme sind handkuratiert. OdeNet (CC BY-SA 4.0) wurde wegen der ShareAlike-Klausel nicht zur Ableitung einer Wortliste verwendet.
+
 ## Zahlwörter
 
 ein, eine, einer, eines, einem, einen, eins, zwei, paar, drei, vier, fünf, sechs, sieben, acht, neun, zehn, Ziffern 1 bis 12
@@ -12,17 +14,19 @@ Person, Personen, Figur, Figuren, Mensch, Menschen, Leute, Leuten, Mann, Männer
 
 ## Objekte
 
-- **Tisch:** Tisch, Tische
-- **Stuhl:** Stuhl, Stühle
+- **Tisch:** Tisch, Tische, Esstisch, Holztisch, Tafel
+- **Stuhl:** Stuhl, Stühle, Sessel, Sitz
 - **Tür:** Tür, Türen
 - **Fenster:** Fenster
-- **Baum:** Baum, Bäume
-- **Auto:** Auto, Autos, Wagen
-- **Würfel:** Würfel, Box, Kiste
+- **Baum:** Baum, Bäume, Tanne, Kiefer, Nadelbaum, Laubbaum, Fichte
+- **Auto:** Auto, Autos, Wagen, Fahrzeug, PKW
+- **Würfel:** Würfel, Box, Kiste, Kasten
 - **Kugel:** Kugel, Kugeln, Ball
 - **Zylinder:** Zylinder
 - **Kegel:** Kegel
 - **Ebene:** Ebene, Platte, Bodenplatte
+- **Felsen:** Felsen, Fels, Stein, Steine, Felsbrocken, Findling
+- **Haus:** Haus, Häuser, Gebäude, Hütte, Wohnhaus
 
 ## Posen
 
@@ -77,6 +81,61 @@ Zahl von 14 bis 200, direkt oder mit Leerzeichen vor „mm“
 - **Studio:** Studio, Studiolicht
 - **Mittag:** Mittag, Mittagssonne, Tageslicht, sonnig, heller Tag
 
+## Landschaften
+
+- **wald:** Wald, Wälder, Waldes, Forst, im Wald, Waldlichtung
+- **wiese:** Wiese, Wiesen, Feld, Felder, Acker, Wiesenland, auf der Wiese
+- **wueste:** Wüste, Wüsten, Sandwüste, Düne, Dünen, Wüstenlandschaft
+- **berge:** Berge, Berg, Gebirge, Gipfel, Alpen, Bergland, im Gebirge
+- **kueste:** Küste, Strand, Meer, Ozean, am Meer, am Strand, die See, offene See, Küstenland
+- **see:** See, am See, Seeufer, Binnensee, Teich
+- **stadt:** Stadt, Straße, Straßen, innerorts, urban, Downtown
+- **innenraum:** Innenraum, Zimmer, im Raum, drinnen
+- **hoehle:** Höhle, Grotte, Kavern, unterirdisch, Felsgrotte
+- **ruine:** Ruine, Ruinen, verfallen, Tempelruine, Schlossruine
+
+## Himmel und Uhrzeit
+
+Uhrzeit als „um 5 Uhr“, „22 Uhr“ oder „18:30 Uhr“
+
+- **sonnenaufgang:** Sonnenaufgang, Morgenrot
+- **daemmerung:** Dämmerung, Sonnenuntergang, Abendrot
+- **blaue_stunde:** blaue Stunde, Blue Hour
+- **mittag:** Mittag, Mittagssonne
+- **nacht:** Nacht, nachts, nächtlich
+- **Uhrzeit:** um 5 Uhr, 22 Uhr, 18:30 Uhr
+
+## Wolken
+
+- **klar:** klar, klarer Himmel, wolkenlos, heiter
+- **bewoelkt:** bewölkt, Wolken, wolkig, bewölkter Himmel
+- **bedeckt:** bedeckt, trüb, grau verhangen
+- **gewitter:** Gewitter, gewittrig, Blitz, Unwetter, Sturm
+
+## Wetter
+
+- **nebel:** Nebel, neblig, Nebelschwaden, dunstig
+- **regen:** Regen, regnerisch, regnet, Regenschauer
+- **schnee:** Schnee, schneit, Schneefall, verschneit
+
+## Mondphasen
+
+- **vollmond:** Vollmond, voller Mond
+- **halbmond:** Halbmond, halber Mond
+- **sichel:** Sichel, Mondsichel, Sichelmond
+
+## Größen und Höhen
+
+Adjektive oder „drei Meter hoher Baum“. Kamera: „auf 10 Meter Höhe“, Drohne, Froschperspektive.
+
+- **riesig:** riesig, riesige, riesiger, riesiges, gigantisch, gigantische
+- **gross:** groß, große, großer, großes, gross, grosse
+- **klein:** klein, kleine, kleiner, kleines
+- **winzig:** winzig, winzige, winziger, winziges
+- **Stapelung:** auf dem Felsen, auf dem Dach, auf dem Tisch
+- **drohne:** Drohne, Drohnenperspektive, Vogelperspektive, Luftaufnahme, aus der Luft
+- **frosch:** Froschperspektive, frosch, bodennah
+
 ## Raum
 
 - **Raum aus:** ohne Raum, kein Raum, draußen, außen, open air
@@ -100,3 +159,10 @@ Komma (,), und, sowie, eine andere, ein anderer, ein anderes
 - Kamera 85 mm
 - 85mm
 - zwei Personen stehen sich gegenüber, links ein Tisch, Kamera halbnah, Abendlicht
+- Wald bei Nacht, Vollmond und Nebel
+- Wüste bei Sonnenuntergang
+- ein drei Meter hoher Baum
+- eine Person steht auf dem Felsen
+- Kamera auf 10 Meter Höhe
+- Berge, Drohne
+- Froschperspektive

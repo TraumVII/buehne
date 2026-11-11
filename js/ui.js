@@ -9,6 +9,9 @@ import {
   TYPE_LABELS
 } from './config.js';
 import { getVocabulary } from './parser.js';
+import { ENVIRONMENT_PRESETS } from './environments.js';
+import { CLOUD_PRESETS, MOON_PHASES, SKY_TIME_PRESETS, WEATHER_PRESETS } from './atmosphere.js';
+import { LIBRARY_CATEGORIES, searchLibrary } from './library.js';
 
 export function bindUI(app) {
   const els = {
@@ -33,6 +36,84 @@ export function bindUI(app) {
       toast(`${TYPE_LABELS[type]} eingefügt`);
     });
     els.insertGrid.appendChild(button);
+  });
+
+  let libraryCategory = 'alle';
+  let libraryQuery = '';
+
+  function renderLibrary() {
+    const root = document.getElementById('library-results');
+    if (!root) return;
+    root.innerHTML = '';
+    searchLibrary(libraryQuery, libraryCategory).forEach((asset) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.assetId = asset.id;
+      button.textContent = asset.name;
+      button.title = `${asset.source} · ${asset.license}`;
+      button.addEventListener('click', () => {
+        app.insertLibrary(asset.id);
+        showTab('edit');
+        toast(`${asset.name} eingefügt`);
+      });
+      root.appendChild(button);
+    });
+    document.querySelectorAll('#library-cats [data-cat]').forEach((button) => {
+      button.classList.toggle('active', button.dataset.cat === libraryCategory);
+    });
+  }
+
+  const libCats = document.getElementById('library-cats');
+  if (libCats) {
+    LIBRARY_CATEGORIES.forEach((cat) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.cat = cat.id;
+      button.textContent = cat.label;
+      button.addEventListener('click', () => {
+        libraryCategory = cat.id;
+        renderLibrary();
+      });
+      libCats.appendChild(button);
+    });
+  }
+  const libSearch = document.getElementById('library-search');
+  if (libSearch) {
+    libSearch.addEventListener('input', () => {
+      libraryQuery = libSearch.value;
+      renderLibrary();
+    });
+  }
+  renderLibrary();
+
+  function fillChipGrid(elementId, entries, onPick, getId = (entry) => entry.id) {
+    const root = document.getElementById(elementId);
+    if (!root) return;
+    entries.forEach((entry) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.id = getId(entry);
+      button.textContent = entry.label;
+      button.addEventListener('click', () => onPick(entry));
+      root.appendChild(button);
+    });
+  }
+
+  fillChipGrid('env-grid', ENVIRONMENT_PRESETS, (entry) => {
+    app.setEnvironment(entry.id);
+    toast(entry.label);
+  });
+  fillChipGrid('sky-time-grid', SKY_TIME_PRESETS, (entry) => {
+    app.setSky({ hour: entry.hour });
+  });
+  fillChipGrid('moon-grid', MOON_PHASES, (entry) => {
+    app.setSky({ moonPhase: entry.id });
+  });
+  fillChipGrid('cloud-grid', CLOUD_PRESETS, (entry) => {
+    app.setSky({ clouds: entry.id });
+  });
+  fillChipGrid('weather-grid', WEATHER_PRESETS, (entry) => {
+    app.setSky({ weather: entry.id });
   });
 
   POSE_KEYS.forEach((pose) => {
@@ -148,6 +229,16 @@ export function bindUI(app) {
   document.getElementById('input-color').addEventListener('input', (event) => {
     app.setColor(event.target.value);
   });
+  const sizeSlider = document.getElementById('slider-size');
+  if (sizeSlider) {
+    sizeSlider.addEventListener('input', () => app.setSelectedSize(sizeSlider.value, { skipCommit: true }));
+    sizeSlider.addEventListener('change', () => app.commit());
+  }
+  const heightSlider = document.getElementById('slider-height-m');
+  if (heightSlider) {
+    heightSlider.addEventListener('input', () => app.setSelectedHeightMeters(heightSlider.value, { skipCommit: true }));
+    heightSlider.addEventListener('change', () => app.commit());
+  }
   document.getElementById('input-color').addEventListener('change', () => app.commit());
   document.getElementById('slider-light-int').addEventListener('input', (event) => {
     app.setLightIntensity(event.target.value);
@@ -184,6 +275,21 @@ export function bindUI(app) {
     const shot = app.saveShot();
     toast(`${shot.name} gespeichert`);
   });
+  document.getElementById('btn-cam-drone')?.addEventListener('click', () => {
+    app.setShotHeight(18);
+    app.setTargetHeight(1.2);
+    toast('Drohnenperspektive');
+  });
+  document.getElementById('btn-cam-frog')?.addEventListener('click', () => {
+    app.setShotHeight(0.22);
+    app.setTargetHeight(0.35);
+    toast('Froschperspektive');
+  });
+  const hourSlider = document.getElementById('slider-hour');
+  if (hourSlider) {
+    hourSlider.addEventListener('input', () => app.setSky({ hour: Number(hourSlider.value) }, { skipCommit: true }));
+    hourSlider.addEventListener('change', () => app.commit());
+  }
 
   document.getElementById('chk-shadows').addEventListener('change', (event) => {
     app.setShadows(event.target.checked);
@@ -493,6 +599,12 @@ export function bindUI(app) {
       });
       const color = document.getElementById('input-color');
       if (document.activeElement !== color) color.value = vm.selected.color;
+      const sizeEl = document.getElementById('slider-size');
+      if (sizeEl && document.activeElement !== sizeEl) sizeEl.value = vm.selected.scale.y;
+      if (sizeEl) document.getElementById('val-size').textContent = format(sizeEl.value);
+      const heightEl = document.getElementById('slider-height-m');
+      if (heightEl && document.activeElement !== heightEl) heightEl.value = vm.selected.heightMeters;
+      if (heightEl) document.getElementById('val-height-m').textContent = `${format(heightEl.value)} m`;
       document.getElementById('light-item-section').hidden = vm.selected.lightIntensity == null;
       if (vm.selected.lightIntensity != null) {
         const slider = document.getElementById('slider-light-int');
@@ -522,10 +634,10 @@ export function bindUI(app) {
     });
     const camYSlider = document.getElementById('slider-cam-y');
     if (document.activeElement !== camYSlider) camYSlider.value = vm.shotHeight;
-    document.getElementById('val-cam-y').textContent = format(camYSlider.value);
+    document.getElementById('val-cam-y').textContent = `${format(camYSlider.value)} m`;
     const targetSlider = document.getElementById('slider-target-y');
     if (document.activeElement !== targetSlider) targetSlider.value = vm.targetHeight;
-    document.getElementById('val-target-y').textContent = format(targetSlider.value);
+    document.getElementById('val-target-y').textContent = `${format(targetSlider.value)} m`;
 
     const shotList = document.getElementById('shot-list');
     const shotSignature = vm.shots.map((shot) => `${shot.id}|${shot.name}|${shot.focalLength}|${shot.aspect}`).join(';');
@@ -553,6 +665,31 @@ export function bindUI(app) {
     document.querySelectorAll('#light-presets [data-preset]').forEach((button) => {
       button.classList.toggle('active', button.dataset.preset === vm.currentLightPreset);
     });
+    document.querySelectorAll('#env-grid [data-id]').forEach((button) => {
+      button.classList.toggle('active', button.dataset.id === vm.environment);
+    });
+    document.querySelectorAll('#moon-grid [data-id]').forEach((button) => {
+      button.classList.toggle('active', button.dataset.id === vm.sky?.moonPhase);
+    });
+    document.querySelectorAll('#cloud-grid [data-id]').forEach((button) => {
+      button.classList.toggle('active', button.dataset.id === vm.sky?.clouds);
+    });
+    document.querySelectorAll('#weather-grid [data-id]').forEach((button) => {
+      button.classList.toggle('active', button.dataset.id === vm.sky?.weather);
+    });
+    const skyHour = vm.sky?.hour ?? 13;
+    document.querySelectorAll('#sky-time-grid [data-id]').forEach((button) => {
+      const preset = SKY_TIME_PRESETS.find((entry) => entry.id === button.dataset.id);
+      button.classList.toggle('active', preset ? Math.abs(preset.hour - skyHour) < 0.35 : false);
+    });
+    const hourEl = document.getElementById('slider-hour');
+    if (hourEl && document.activeElement !== hourEl) hourEl.value = skyHour;
+    if (hourEl) {
+      const h = Number(hourEl.value);
+      const hh = Math.floor(h) % 24;
+      const mm = Math.round((h - Math.floor(h)) * 60);
+      document.getElementById('val-hour').textContent = `${String(hh).padStart(2, '0')}:${String(mm % 60).padStart(2, '0')}`;
+    }
     const mapping = [
       ['slider-az', 'val-az', vm.lights.sun.azimuth, 0],
       ['slider-el', 'val-el', vm.lights.sun.elevation, 0],

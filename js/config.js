@@ -30,6 +30,9 @@ export const TYPE_LABELS = {
   window: 'Fenster',
   tree: 'Baum',
   car: 'Auto',
+  rock: 'Felsen',
+  house: 'Haus',
+  library: 'Bibliothek',
   pointlight: 'Punktlicht',
   spotlight: 'Spotlicht'
 };
@@ -38,6 +41,7 @@ export const INSERT_TYPES = [
   'figure', 'cube', 'sphere', 'cylinder',
   'cone', 'plane', 'table', 'chair',
   'door', 'window', 'tree', 'car',
+  'rock', 'house',
   'pointlight', 'spotlight'
 ];
 
@@ -80,13 +84,13 @@ export const LIGHT_PRESETS = {
   },
   abend: {
     label: 'Abend',
-    ambient: { intensity: 0.42, color: '#e8aa7c' },
-    sun: { azimuth: 258, elevation: 16, intensity: 1.9, color: '#ff9348' }
+    ambient: { intensity: 0.36, color: '#e8aa7c' },
+    sun: { azimuth: 258, elevation: 6, intensity: 1.55, color: '#ff8038' }
   },
   nacht: {
     label: 'Nacht',
-    ambient: { intensity: 0.12, color: '#1c2744' },
-    sun: { azimuth: 210, elevation: 38, intensity: 0.32, color: '#a8c4ff' }
+    ambient: { intensity: 0.1, color: '#1c2744' },
+    sun: { azimuth: 48, elevation: -20, intensity: 0.05, color: '#1a2240' }
   },
   studio: {
     label: 'Studio',

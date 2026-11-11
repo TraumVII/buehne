@@ -566,3 +566,26 @@ body.layout-side #tabs button {
   color: var(--muted);
   line-height: 1.45;
 }
+
+.library-search {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  padding: 0 12px;
+  margin: 8px 0;
+}
+
+.library-cats {
+  margin-bottom: 8px;
+}
+
+.library-grid button {
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.world-grid button {
+  font-size: 12px;
+}

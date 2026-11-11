@@ -53,18 +53,90 @@ export const PERSON_ENTRIES = [
 ];
 
 export const OBJECT_ENTRIES = [
-  { type: 'table', words: ['Tisch', 'Tische'] },
-  { type: 'chair', words: ['Stuhl', 'Stühle'], match: ['stuehl'] },
+  { type: 'table', words: ['Tisch', 'Tische', 'Esstisch', 'Holztisch', 'Tafel'] },
+  { type: 'chair', words: ['Stuhl', 'Stühle', 'Sessel', 'Sitz'], match: ['stuehl'] },
   { type: 'door', words: ['Tür', 'Türen'] },
   { type: 'window', words: ['Fenster'] },
-  { type: 'tree', words: ['Baum', 'Bäume'] },
-  { type: 'car', words: ['Auto', 'Autos', 'Wagen'] },
-  { type: 'cube', words: ['Würfel', 'Box', 'Kiste'] },
+  { type: 'tree', words: ['Baum', 'Bäume', 'Tanne', 'Kiefer', 'Nadelbaum', 'Laubbaum', 'Fichte'] },
+  { type: 'car', words: ['Auto', 'Autos', 'Wagen', 'Fahrzeug', 'PKW'] },
+  { type: 'cube', words: ['Würfel', 'Box', 'Kiste', 'Kasten'] },
   { type: 'sphere', words: ['Kugel', 'Kugeln', 'Ball'] },
   { type: 'cylinder', words: ['Zylinder'] },
   { type: 'cone', words: ['Kegel'] },
-  { type: 'plane', words: ['Ebene', 'Platte', 'Bodenplatte'] }
+  { type: 'plane', words: ['Ebene', 'Platte', 'Bodenplatte'] },
+  { type: 'rock', words: ['Felsen', 'Fels', 'Stein', 'Steine', 'Felsbrocken', 'Findling'] },
+  { type: 'house', words: ['Haus', 'Häuser', 'Gebäude', 'Hütte', 'Wohnhaus'] }
 ];
+
+// Synonyme sind handkuratiert. OdeNet (CC BY-SA 4.0, ShareAlike) wurde nicht
+// zur Ableitung einer Synonymliste verwendet, damit die App nicht unter
+// derselben Lizenz stehen muss.
+
+export const ENVIRONMENT_ENTRIES = [
+  { id: 'wald', words: ['Wald', 'Wälder', 'Waldes', 'Forst', 'im Wald', 'Waldlichtung'] },
+  { id: 'wiese', words: ['Wiese', 'Wiesen', 'Feld', 'Felder', 'Acker', 'Wiesenland', 'auf der Wiese'] },
+  { id: 'wueste', words: ['Wüste', 'Wüsten', 'Sandwüste', 'Düne', 'Dünen', 'Wüstenlandschaft'] },
+  { id: 'berge', words: ['Berge', 'Berg', 'Gebirge', 'Gipfel', 'Alpen', 'Bergland', 'im Gebirge'] },
+  { id: 'kueste', words: ['Küste', 'Strand', 'Meer', 'Ozean', 'am Meer', 'am Strand', 'die See', 'offene See', 'Küstenland'] },
+  { id: 'see', words: ['See', 'am See', 'Seeufer', 'Binnensee', 'Teich'] },
+  { id: 'stadt', words: ['Stadt', 'Straße', 'Straßen', 'innerorts', 'urban', 'Downtown'] },
+  { id: 'innenraum', words: ['Innenraum', 'Zimmer', 'im Raum', 'drinnen'] },
+  { id: 'hoehle', words: ['Höhle', 'Grotte', 'Kavern', 'unterirdisch', 'Felsgrotte'] },
+  { id: 'ruine', words: ['Ruine', 'Ruinen', 'verfallen', 'Tempelruine', 'Schlossruine'] }
+];
+
+export const SKY_TIME_ENTRIES = [
+  { id: 'sonnenaufgang', hour: 6.4, light: 'morgen', words: ['Sonnenaufgang', 'Morgenrot'] },
+  { id: 'daemmerung', hour: 19.15, light: 'abend', words: ['Dämmerung', 'Sonnenuntergang', 'Abendrot'] },
+  { id: 'blaue_stunde', hour: 20.6, light: 'nacht', words: ['blaue Stunde', 'Blue Hour'] },
+  { id: 'mittag', hour: 13, light: 'mittag', words: ['Mittag', 'Mittagssonne'] },
+  { id: 'nacht', hour: 22.6, light: 'nacht', words: ['Nacht', 'nachts', 'nächtlich'] }
+];
+
+export const CLOUD_ENTRIES = [
+  { id: 'klar', words: ['klar', 'klarer Himmel', 'wolkenlos', 'heiter'] },
+  { id: 'bewoelkt', words: ['bewölkt', 'Wolken', 'wolkig', 'bewölkter Himmel'] },
+  { id: 'bedeckt', words: ['bedeckt', 'trüb', 'grau verhangen'] },
+  { id: 'gewitter', words: ['Gewitter', 'gewittrig', 'Blitz', 'Unwetter', 'Sturm'] }
+];
+
+export const WEATHER_ENTRIES = [
+  { id: 'nebel', words: ['Nebel', 'neblig', 'Nebelschwaden', 'dunstig'] },
+  { id: 'regen', words: ['Regen', 'regnerisch', 'regnet', 'Regenschauer'] },
+  { id: 'schnee', words: ['Schnee', 'schneit', 'Schneefall', 'verschneit'] }
+];
+
+export const MOON_PHASE_ENTRIES = [
+  { id: 'vollmond', words: ['Vollmond', 'voller Mond'] },
+  { id: 'halbmond', words: ['Halbmond', 'halber Mond'] },
+  { id: 'sichel', words: ['Sichel', 'Mondsichel', 'Sichelmond'] }
+];
+
+export const SIZE_ENTRIES = [
+  { id: 'riesig', scale: 3.2, words: ['riesig', 'riesige', 'riesiger', 'riesiges', 'gigantisch', 'gigantische'] },
+  { id: 'gross', scale: 1.7, words: ['groß', 'große', 'großer', 'großes', 'gross', 'grosse'] },
+  { id: 'klein', scale: 0.55, words: ['klein', 'kleine', 'kleiner', 'kleines'] },
+  { id: 'winzig', scale: 0.28, words: ['winzig', 'winzige', 'winziger', 'winziges'] }
+];
+
+export const SUPPORT_ENTRIES = [
+  { key: 'rock', type: 'rock', words: ['Felsen', 'Fels', 'Stein', 'Steinen'] },
+  { key: 'house', type: 'house', words: ['Dach', 'Hausdach'] },
+  { key: 'table', type: 'table', words: ['Tisch'] },
+  { key: 'car', type: 'car', words: ['Auto', 'Wagen'] },
+  { key: 'cube', type: 'cube', words: ['Kiste', 'Box', 'Würfel'] }
+];
+
+export const CAMERA_HEIGHT_ENTRIES = [
+  { id: 'drohne', heightMeters: 18, words: ['Drohne', 'Drohnenperspektive', 'Vogelperspektive', 'Luftaufnahme', 'aus der Luft'] },
+  { id: 'frosch', heightMeters: 0.22, words: ['Froschperspektive', 'frosch', 'bodennah'] }
+];
+
+export const TIME_OF_DAY_INFO = {
+  syntax: 'Uhrzeit als „um 5 Uhr“, „22 Uhr“ oder „18:30 Uhr“',
+  examples: ['um 5 Uhr', '22 Uhr', '18:30 Uhr'],
+  pattern: String.raw`\b(?:um\s+)?(\d{1,2})(?:[:.](\d{2}))?\s*uhr\b`
+};
 
 export const POSE_ENTRIES = [
   { pose: 'stehen', words: ['stehen', 'steht', 'stehend', 'stand'] },
@@ -142,7 +214,14 @@ export const EXAMPLE_SENTENCES = [
   'eine Person ohne Auto',
   'Kamera 85 mm',
   '85mm',
-  'zwei Personen stehen sich gegenüber, links ein Tisch, Kamera halbnah, Abendlicht'
+  'zwei Personen stehen sich gegenüber, links ein Tisch, Kamera halbnah, Abendlicht',
+  'Wald bei Nacht, Vollmond und Nebel',
+  'Wüste bei Sonnenuntergang',
+  'ein drei Meter hoher Baum',
+  'eine Person steht auf dem Felsen',
+  'Kamera auf 10 Meter Höhe',
+  'Berge, Drohne',
+  'Froschperspektive'
 ];
 
 export function getVocabulary() {
@@ -221,6 +300,48 @@ export function getVocabulary() {
         }))
       },
       {
+        id: 'environments',
+        title: 'Landschaften',
+        groups: ENVIRONMENT_ENTRIES.map((entry) => ({
+          label: entry.id,
+          words: entry.words
+        }))
+      },
+      {
+        id: 'sky',
+        title: 'Himmel und Uhrzeit',
+        note: TIME_OF_DAY_INFO.syntax,
+        groups: [
+          ...SKY_TIME_ENTRIES.map((entry) => ({ label: entry.id, words: entry.words })),
+          { label: 'Uhrzeit', words: TIME_OF_DAY_INFO.examples }
+        ]
+      },
+      {
+        id: 'clouds',
+        title: 'Wolken',
+        groups: CLOUD_ENTRIES.map((entry) => ({ label: entry.id, words: entry.words }))
+      },
+      {
+        id: 'weather',
+        title: 'Wetter',
+        groups: WEATHER_ENTRIES.map((entry) => ({ label: entry.id, words: entry.words }))
+      },
+      {
+        id: 'moon',
+        title: 'Mondphasen',
+        groups: MOON_PHASE_ENTRIES.map((entry) => ({ label: entry.id, words: entry.words }))
+      },
+      {
+        id: 'sizes',
+        title: 'Größen und Höhen',
+        note: 'Adjektive oder „drei Meter hoher Baum“. Kamera: „auf 10 Meter Höhe“, Drohne, Froschperspektive.',
+        groups: [
+          ...SIZE_ENTRIES.map((entry) => ({ label: entry.id, words: entry.words })),
+          { label: 'Stapelung', words: ['auf dem Felsen', 'auf dem Dach', 'auf dem Tisch'] },
+          ...CAMERA_HEIGHT_ENTRIES.map((entry) => ({ label: entry.id, words: entry.words }))
+        ]
+      },
+      {
         id: 'room',
         title: 'Raum',
         groups: ROOM_ENTRIES.map((entry) => ({
@@ -253,6 +374,8 @@ export function formatVocabularyMarkdown() {
     '# Wortschatz von Bühne',
     '',
     'Diese Liste wird aus denselben Parser-Daten erzeugt, die die App zum Verstehen von Szenenbeschreibungen nutzt.',
+    '',
+    'Deutsche Synonyme sind handkuratiert. OdeNet (CC BY-SA 4.0) wurde wegen der ShareAlike-Klausel nicht zur Ableitung einer Wortliste verwendet.',
     ''
   ];
   catalog.sections.forEach((section) => {

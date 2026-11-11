@@ -1,6 +1,7 @@
 import { BuehneApp } from './app.js';
 import { bindUI } from './ui.js';
 import { getVocabulary } from './parser.js';
+import { searchLibrary } from './library.js';
 
 document.addEventListener('gesturestart', (event) => event.preventDefault());
 document.addEventListener('dblclick', (event) => {
@@ -30,8 +31,11 @@ window.Buehne = {
     return Boolean(app?.ready);
   },
   ready: app.readyPromise,
-  insert(type) {
-    return app.insert(type).id;
+  insert(type, options) {
+    return app.insert(type, options || {}).id;
+  },
+  insertLibrary(assetId) {
+    return app.insertLibrary(assetId).id;
   },
   parse(text) {
     return app.parse(text);
@@ -65,6 +69,9 @@ window.Buehne = {
   },
   setWorkView(position, target) {
     app.setWorkView(position, target);
+  },
+  setShotView(position, target) {
+    app.setShotView(position, target);
   },
   loadJSON(input) {
     const result = app.loadJSONData(input);
@@ -103,6 +110,18 @@ window.Buehne = {
   },
   getVocabulary() {
     return getVocabulary();
+  },
+  setEnvironment(id) {
+    app.setEnvironment(id);
+  },
+  setSky(partial) {
+    app.setSky(partial);
+  },
+  searchLibrary(query, category) {
+    return searchLibrary(query, category);
+  },
+  getPerformanceInfo() {
+    return app.getPerformanceInfo();
   }
 };
 

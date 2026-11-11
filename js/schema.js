@@ -1,7 +1,7 @@
 import { ASPECTS, TYPE_LABELS } from './config.js';
 
 const KNOWN_TYPES = new Set(Object.keys(TYPE_LABELS));
-const SCENE_KEYS = ['version', 'items', 'shotCamera', 'workCamera', 'lights', 'shots', 'room'];
+const SCENE_KEYS = ['version', 'items', 'shotCamera', 'workCamera', 'lights', 'shots', 'room', 'environment', 'sky'];
 const TRANSFORM_MODES = new Set(['translate', 'rotate', 'scale']);
 
 function isObject(value) {
@@ -43,6 +43,15 @@ function validateItem(item, index) {
         fail(`Objekt ${index + 1}: Lichtwert „${key}“ muss eine Zahl sein.`);
       }
     });
+  }
+  if (item.assetId != null && typeof item.assetId !== 'string') {
+    fail(`Objekt ${index + 1}: „assetId“ muss Text sein.`);
+  }
+  if (item.heightMeters != null && typeof item.heightMeters !== 'number') {
+    fail(`Objekt ${index + 1}: „heightMeters“ muss eine Zahl sein.`);
+  }
+  if (item.onTopOf != null && typeof item.onTopOf !== 'string') {
+    fail(`Objekt ${index + 1}: „onTopOf“ muss Text sein.`);
   }
 }
 
@@ -123,6 +132,28 @@ export function validateAndNormalizeScene(data) {
   if (data.uniformScale != null && typeof data.uniformScale !== 'boolean') fail('„uniformScale“ muss wahr oder falsch sein.');
   if (data.currentLightPreset != null && typeof data.currentLightPreset !== 'string') {
     fail('„currentLightPreset“ muss Text sein.');
+  }
+  if (data.environment != null) {
+    if (typeof data.environment === 'string') {
+      /* known ids checked loosely so older experimental keys fail clearly */
+      const known = new Set(['none', 'wald', 'wiese', 'wueste', 'berge', 'kueste', 'see', 'stadt', 'innenraum', 'hoehle', 'ruine']);
+      if (!known.has(data.environment)) fail('„environment“ ist unbekannt.');
+    } else if (isObject(data.environment)) {
+      if (data.environment.id != null && typeof data.environment.id !== 'string') {
+        fail('„environment.id“ muss Text sein.');
+      }
+    } else {
+      fail('„environment“ muss Text oder ein Objekt sein.');
+    }
+  }
+  if (data.sky != null) {
+    if (!isObject(data.sky)) fail('„sky“ muss ein Objekt sein.');
+    ['hour'].forEach((key) => {
+      if (data.sky[key] != null && typeof data.sky[key] !== 'number') fail(`„sky.${key}“ muss eine Zahl sein.`);
+    });
+    ['moonPhase', 'clouds', 'weather'].forEach((key) => {
+      if (data.sky[key] != null && typeof data.sky[key] !== 'string') fail(`„sky.${key}“ muss Text sein.`);
+    });
   }
   return data;
 }
