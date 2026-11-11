@@ -196,7 +196,7 @@ button:active {
   right: 0;
   bottom: 0;
   z-index: 5;
-  max-height: min(46vh, 390px);
+  max-height: min(56vh, 490px);
   background: rgba(28, 28, 36, 0.97);
   border-top: 1px solid var(--line);
   border-radius: 20px 20px 0 0;
@@ -207,17 +207,16 @@ button:active {
 
 #tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   padding: 8px 8px 0;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-x;
+  overflow: visible;
 }
 
 #tabs button {
-  flex: 1 0 0;
-  min-width: 58px;
-  min-height: 46px;
+  flex: 1 1 5.2em;
+  min-width: 0;
+  min-height: 42px;
   border: 0;
   border-radius: 12px 12px 0 0;
   background: transparent;
@@ -382,7 +381,7 @@ button:active {
 
 textarea {
   width: 100%;
-  min-height: 110px;
+  min-height: 80px;
   border-radius: 12px;
   border: 1px solid var(--line);
   background: var(--panel-2);
@@ -495,4 +494,75 @@ body.layout-side .insert-grid {
     max-height: min(70vh, 620px);
     padding-bottom: 12px;
   }
+}
+
+body.layout-side #tabs button {
+  flex: 1 1 30%;
+  min-width: calc(33.33% - 4px);
+}
+
+.mic-btn {
+  width: 100%;
+  min-height: 56px;
+  margin: 10px 0 6px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--panel-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-weight: 650;
+}
+
+.mic-btn svg {
+  width: 26px;
+  height: 26px;
+}
+
+.mic-btn.listening {
+  background: #8a2f28;
+  color: #ffd8d3;
+  animation: mic-pulse 1.15s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212, 103, 90, 0.5); }
+  70% { box-shadow: 0 0 0 12px rgba(212, 103, 90, 0); }
+}
+
+#speech-status.is-error {
+  color: #ffd8d3;
+  background: #5a2e2a;
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+#vocab-box {
+  margin: 12px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 2px 12px 10px;
+  background: var(--panel-2);
+}
+
+#vocab-box summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.vocab-section h4 {
+  margin: 12px 0 4px;
+  font-size: 14px;
+}
+
+.vocab-words,
+.vocab-group {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
 }

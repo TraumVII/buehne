@@ -167,18 +167,24 @@
         <div class="panel" data-panel="text" hidden>
           <label class="area-label" for="input-prompt">Szene beschreiben</label>
           <textarea id="input-prompt" rows="4" placeholder="zwei Personen stehen sich gegenüber, links ein Tisch, Kamera halbnah, Abendlicht"></textarea>
+          <button type="button" id="btn-mic" class="mic-btn" aria-pressed="false" aria-label="Spracheingabe">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 11a5 5 0 0 0 10 0M12 16v4M9 20h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span id="mic-label">Sprechen</span>
+          </button>
+          <label class="check-row">
+            <input type="checkbox" id="chk-auto-parse" checked>
+            <span>Nach dem Sprechen automatisch bauen</span>
+          </label>
+          <p id="speech-privacy" class="hint">Safari verarbeitet die Sprache über Apples Spracherkennung.</p>
+          <p id="speech-status" class="hint" hidden role="status"></p>
           <button type="button" id="btn-parse" class="primary">Szene aufbauen</button>
           <div id="parse-help" class="hint">
-            <p>Der Text wird lokal ausgewertet, ohne Internetzugriff. Erkannte Figuren und Objekte ersetzen die aktuelle Bühne. Satzteile werden an Kommas, „und“ und „eine andere“ getrennt.</p>
-            <ul>
-              <li>Mengen: „zwei Personen und ein Tisch“</li>
-              <li>Orte: „ein Tisch links, ein Stuhl rechts“</li>
-              <li>Posen je Person: „eine Person sitzt links, eine andere steht rechts“</li>
-              <li>Verneinung: „kein Auto“, „ohne Tisch“</li>
-              <li>Kamera: „halbnah“, „85 mm“ oder „85mm“, „Hochformat“</li>
-              <li>Licht: „Abendlicht“, „Nacht“, „Studio“</li>
-            </ul>
+            <p>Der Text wird lokal ausgewertet, ohne Internetzugriff. Satzteile werden an Kommas, „und“ und „eine andere“ getrennt. Den vollständigen Wortschatz findest du darunter.</p>
           </div>
+          <details id="vocab-box">
+            <summary>Was die App versteht</summary>
+            <div id="vocab-list"></div>
+          </details>
           <p id="parse-summary" class="hint" hidden></p>
         </div>
 

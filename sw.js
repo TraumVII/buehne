@@ -1,4 +1,4 @@
-const CACHE = 'buehne-v2';
+const CACHE = 'buehne-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -12,6 +12,7 @@ const ASSETS = [
   './js/figures.js',
   './js/objects.js',
   './js/parser.js',
+  './js/lexicon.js',
   './js/export.js',
   './js/schema.js',
   './vendor/three/three.module.js',

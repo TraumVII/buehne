@@ -21,13 +21,13 @@ Zum Home-Bildschirm: in Safari „Zum Home-Bildschirm“ wählen (PWA-Manifest i
 - Figuren: Pose-Voreinstellungen (stehen, gehen, sitzen, zeigen, kniend, liegend) und Gelenk-Slider.
 - **Kamera:** Brennweite 14–200 mm, Seitenverhältnisse 16:9, 9:16, 2.39:1, 4:3, 1:1. „Durch die Shot-Kamera schauen“ zeigt den Bildrahmen mit Drittellinien. Mehrere Shots speicherbar.
 - **Licht:** Morgen, Mittag, Abend, Nacht, Studio; Sonne und Umgebung manuell; Schatten ein/aus.
-- **Text:** Szene auf Deutsch beschreiben, zum Beispiel `zwei Personen stehen sich gegenüber, links ein Tisch, Kamera halbnah, Abendlicht`. Satzteile werden an Kommas, „und“ und „eine andere“ getrennt. Unterstützt werden Mengen („zwei Personen und ein Tisch“), Richtungen je Objekt, Posen je Person, Verneinungen („kein Auto“, „ohne …“) sowie Brennweiten wie „85 mm“. Ein lokaler Parser ohne API-Schlüssel setzt Figuren, Objekte, Pose, Einstellung und Licht. Danach manuell korrigieren. Beschriebene Figuren und Objekte ersetzen die aktuelle Bühne.
+- **Text:** Szene auf Deutsch beschreiben oder mit dem Mikrofon-Knopf diktieren (Web Speech API, Deutsch), zum Beispiel `zwei Personen stehen sich gegenüber, links ein Tisch, Kamera halbnah, Abendlicht`. Satzteile werden an Kommas, „und“ und „eine andere“ getrennt. Unterstützt werden Mengen („zwei Personen und ein Tisch“), Richtungen je Objekt, Posen je Person, Verneinungen („kein Auto“, „ohne …“) sowie Brennweiten wie „85 mm“. Ein lokaler Parser ohne API-Schlüssel setzt Figuren, Objekte, Pose, Einstellung und Licht. Danach manuell korrigieren. Beschriebene Figuren und Objekte ersetzen die aktuelle Bühne.
 - **Export:** PNG der Shot-Kamera in Farbe, Graustufen oder Tiefe, Teilen oder Download. Szene als JSON speichern und laden. Autosave im Browser (`localStorage`).
 - Oben: Rückgängig und Wiederholen.
 
 ## Technik
 
-Reine Client-App, keine Server-Logik, kein CDN. Bibliothek: [three.js](https://github.com/mrdoob/three.js) (MIT) mit OrbitControls und TransformControls.
+Reine Client-App, keine Server-Logik, kein CDN. Bibliothek: [three.js](https://github.com/mrdoob/three.js) (MIT) mit OrbitControls und TransformControls. Der Text-Wortschatz steht in [VOCABULARY.md](VOCABULARY.md) und wird aus denselben Parser-Daten erzeugt (`npm run vocab` bzw. `node scripts/generate-vocabulary.mjs`).
 
 ## Tests
 

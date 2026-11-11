@@ -1,85 +1,80 @@
 import { ASPECTS, LIGHT_PRESETS, POSE_KEYS } from './config.js';
+import {
+  ASPECT_ENTRIES,
+  CLAUSE_SEPARATORS,
+  FOCAL_LENGTH_INFO,
+  FORMATION_ENTRIES,
+  LIGHT_ENTRIES,
+  NEGATION_WORDS,
+  NUMBER_ENTRIES,
+  OBJECT_ENTRIES,
+  PERSON_ENTRIES,
+  POSE_ENTRIES,
+  POSITION_ENTRIES,
+  ROOM_ENTRIES,
+  SHOT_ENTRIES,
+  formatVocabularyMarkdown,
+  getVocabulary,
+  normalize,
+  phraseRegex
+} from './lexicon.js';
 
-const NUMBER_WORDS = {
-  ein: 1, eine: 1, einer: 1, eines: 1, einem: 1, einen: 1, eins: 1,
-  zwei: 2, drei: 3, vier: 4, fuenf: 5, sechs: 6, sieben: 7,
-  acht: 8, neun: 9, zehn: 10, paar: 2
-};
+const NUMBER_WORDS = {};
+NUMBER_ENTRIES.forEach((entry) => {
+  entry.words.forEach((word) => {
+    NUMBER_WORDS[normalize(word)] = entry.value;
+  });
+});
 
-const OBJECT_WORDS = {
-  tisch: 'table', tische: 'table',
-  stuhl: 'chair', stuehle: 'chair', stuehl: 'chair',
-  tuer: 'door', tueren: 'door',
-  fenster: 'window',
-  baum: 'tree', baeume: 'tree',
-  auto: 'car', autos: 'car', wagen: 'car',
-  wuerfel: 'cube', box: 'cube', kiste: 'cube',
-  kugel: 'sphere', kugeln: 'sphere', ball: 'sphere',
-  zylinder: 'cylinder',
-  kegel: 'cone',
-  ebene: 'plane', platte: 'plane', bodenplatte: 'plane'
-};
+const OBJECT_WORDS = {};
+OBJECT_ENTRIES.forEach((entry) => {
+  [...entry.words, ...(entry.match || [])].forEach((word) => {
+    OBJECT_WORDS[normalize(word)] = entry.type;
+  });
+});
 
-const PERSON_WORDS = new Set([
-  'person', 'personen', 'figur', 'figuren', 'mensch', 'menschen',
-  'leute', 'mann', 'maenner', 'frau', 'frauen', 'darsteller',
-  'schauspieler', 'jemand', 'leuten'
-]);
+const PERSON_WORDS = new Set(PERSON_ENTRIES.map((entry) => normalize(entry.word)));
+const PERSON_PLURAL = new Set(
+  PERSON_ENTRIES.filter((entry) => entry.plural).map((entry) => normalize(entry.word))
+);
+const NEGATION = new Set(NEGATION_WORDS.map((word) => normalize(word)));
 
-const PERSON_PLURAL = new Set([
-  'personen', 'figuren', 'menschen', 'leute', 'leuten', 'maenner', 'frauen'
-]);
+const POSE_WORDS = {};
+POSE_ENTRIES.forEach((entry) => {
+  entry.words.forEach((word) => {
+    POSE_WORDS[normalize(word)] = entry.pose;
+  });
+});
 
-const NEGATION = new Set(['kein', 'keine', 'keinen', 'keinem', 'keiner', 'keines', 'ohne', 'nicht']);
+const SHOT_WORDS = {};
+export const SHOT_FOCAL = {};
+SHOT_ENTRIES.forEach((entry) => {
+  SHOT_FOCAL[entry.size] = entry.mm;
+  entry.words.forEach((word) => {
+    SHOT_WORDS[normalize(word)] = entry.size;
+  });
+});
 
-const POSE_WORDS = {
-  stehen: 'stehen', steht: 'stehen', stehend: 'stehen', stand: 'stehen',
-  gehen: 'gehen', geht: 'gehen', gehend: 'gehen', laufen: 'gehen', laeuft: 'gehen',
-  sitzen: 'sitzen', sitzt: 'sitzen', sitzend: 'sitzen',
-  zeigen: 'zeigen', zeigt: 'zeigen', zeigend: 'zeigen', deuten: 'zeigen', deutet: 'zeigen',
-  knien: 'kniend', kniet: 'kniend', kniend: 'kniend', knieend: 'kniend',
-  liegen: 'liegend', liegt: 'liegend', liegend: 'liegend'
-};
-
-const SHOT_WORDS = {
-  weitwinkel: 'weit', weit: 'weit', total: 'weit', totals: 'weit', overview: 'weit',
-  amerikanisch: 'amerikanisch', amerikanische: 'amerikanisch',
-  halbnah: 'halbnah', halbnahe: 'halbnah', medium: 'halbnah', halbnaheinstellung: 'halbnah',
-  nah: 'nah', nahe: 'nah', nahaufnahme: 'nah', portrait: 'nah', portraet: 'nah', closeup: 'nah',
-  detail: 'detail', detailaufnahme: 'detail', close: 'detail'
-};
-
-const SHOT_FOCAL = {
-  weit: 24,
-  amerikanisch: 35,
-  halbnah: 50,
-  nah: 85,
-  detail: 135
-};
-
-function normalize(text) {
-  return String(text || '')
-    .toLowerCase()
-    .replace(/ä/g, 'ae')
-    .replace(/ö/g, 'oe')
-    .replace(/ü/g, 'ue')
-    .replace(/ß/g, 'ss')
-    .replace(/[.:;!?/\\|]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+const FOCAL_PATTERN = new RegExp(FOCAL_LENGTH_INFO.pattern);
 
 function tokenize(normalized) {
   return normalized.split(/[^a-z0-9]+/).filter(Boolean);
 }
 
 function splitClauses(normalized) {
-  return normalized
-    .replace(/\beine andere\b/g, '||| eine person')
-    .replace(/\bein anderer\b/g, '||| eine person')
-    .replace(/\bein anderes\b/g, '||| eine person')
-    .replace(/\bsowie\b/g, '|||')
-    .replace(/\s+und\s+/g, '|||')
+  let text = normalized;
+  CLAUSE_SEPARATORS.otherPerson.forEach((phrase) => {
+    const pattern = new RegExp(`\\b${normalize(phrase)}\\b`, 'g');
+    text = text.replace(pattern, '||| eine person');
+  });
+  CLAUSE_SEPARATORS.words.forEach((word) => {
+    if (word === 'und') {
+      text = text.replace(/\s+und\s+/g, '|||');
+    } else {
+      text = text.replace(new RegExp(`\\b${normalize(word)}\\b`, 'g'), '|||');
+    }
+  });
+  return text
     .split(/,|\|\|\|/)
     .map((part) => part.trim())
     .filter(Boolean);
@@ -103,20 +98,23 @@ function findCount(words, pluralDefault) {
 }
 
 function findPosition(words) {
-  const left = words.some((w) => w === 'links' || w === 'linke' || w === 'linker' || w === 'linkes');
-  const right = words.some((w) => w === 'rechts' || w === 'rechte' || w === 'rechter' || w === 'rechtes');
-  const front = words.some((w) => w === 'vorne' || w === 'vorn' || w === 'vor' || w === 'vordergrund');
-  const back = words.some((w) => w === 'hinten' || w === 'hinter' || w === 'hintergrund');
-  const mid = words.some((w) => w === 'mitte' || w === 'zentral' || w === 'zentrum');
-  if (!left && !right && !front && !back && !mid) return null;
+  const set = new Set(words);
   let x = 0;
   let z = 0;
   const labels = [];
-  if (left) { x = -1.85; labels.push('links'); }
-  if (right) { x = 1.85; labels.push('rechts'); }
-  if (front) { z = 1.75; labels.push('vorne'); }
-  if (back) { z = -1.75; labels.push('hinten'); }
-  if (mid && labels.length === 0) labels.push('mitte');
+  let found = false;
+  POSITION_ENTRIES.forEach((entry) => {
+    if (!entry.words.some((word) => set.has(normalize(word)))) return;
+    found = true;
+    if (entry.key === 'mitte') {
+      if (labels.length === 0) labels.push(entry.key);
+      return;
+    }
+    if (entry.x) x = entry.x;
+    if (entry.z) z = entry.z;
+    labels.push(entry.key);
+  });
+  if (!found) return null;
   return { key: labels.join(' ') || 'mitte', x, z };
 }
 
@@ -125,20 +123,16 @@ function hasNegationBefore(tokens, index) {
 }
 
 function detectAspect(normalized) {
-  if (/(9\s*zu\s*16|9\s*16|hochformat|hochkant|portraitformat)/.test(normalized)) return '9:16';
-  if (/(2\s*39|cinemascope|scope|kinoformat|breitwand)/.test(normalized)) return '2.39:1';
-  if (/(1\s*zu\s*1|quadrat|quadratisch)/.test(normalized)) return '1:1';
-  if (/(4\s*zu\s*3|4\s*3)/.test(normalized)) return '4:3';
-  if (/(16\s*zu\s*9|16\s*9|querformat|landscape)/.test(normalized)) return '16:9';
+  for (const entry of ASPECT_ENTRIES) {
+    if (phraseRegex(entry.words).test(normalized)) return entry.aspect;
+  }
   return null;
 }
 
 function detectLight(normalized) {
-  if (/(abendlicht|abend|sonnenuntergang|golden hour|goldene stunde|daemmerung)/.test(normalized)) return 'abend';
-  if (/(sonnenaufgang|morgenlicht|morgens|frueh|morgen)/.test(normalized)) return 'morgen';
-  if (/(nacht|nächt|naecht|mond|dunkel|nachts)/.test(normalized)) return 'nacht';
-  if (/(studio|studiolicht)/.test(normalized)) return 'studio';
-  if (/(mittag|mittagssonne|tageslicht|sonnig|heller tag)/.test(normalized)) return 'mittag';
+  for (const entry of LIGHT_ENTRIES) {
+    if (phraseRegex(entry.words).test(normalized)) return entry.key;
+  }
   return null;
 }
 
@@ -158,22 +152,24 @@ function detectShot(tokens, normalized) {
 }
 
 function detectFocalLength(normalized) {
-  const match = normalized.match(/\b(\d{2,3})\s*mm\b/);
+  const match = normalized.match(FOCAL_PATTERN);
   if (!match) return null;
   const value = parseInt(match[1], 10);
-  return value >= 14 && value <= 200 ? value : null;
+  return value >= FOCAL_LENGTH_INFO.min && value <= FOCAL_LENGTH_INFO.max ? value : null;
 }
 
 function detectRoom(normalized) {
-  if (/(ohne raum|kein raum|draussen|draußen|aussen|open air)/.test(normalized)) return false;
-  if (/(im raum|innenraum|zimmer|innen|waende|wände)/.test(normalized)) return true;
+  for (const entry of ROOM_ENTRIES) {
+    if (phraseRegex(entry.words).test(normalized)) return entry.room;
+  }
   return null;
 }
 
 function detectFormation(normalized, count) {
-  if (/(gegenueber|vis\-a\-vis|einander|sich gegen|face to face)/.test(normalized)) return 'gegenueber';
-  if (/(nebeneinander|neben einander|in einer reihe|nebeneinan)/.test(normalized)) return 'reihe';
-  if (count >= 3 && /kreis|im rund/.test(normalized)) return 'kreis';
+  for (const entry of FORMATION_ENTRIES) {
+    if (entry.minCount && count < entry.minCount) continue;
+    if (phraseRegex(entry.words).test(normalized)) return entry.key;
+  }
   return count >= 2 ? 'reihe' : 'einzeln';
 }
 
@@ -273,4 +269,4 @@ export function parseSceneText(text) {
   };
 }
 
-export { SHOT_FOCAL };
+export { formatVocabularyMarkdown, getVocabulary, normalize };

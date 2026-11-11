@@ -2,10 +2,11 @@
   "name": "buehne-previs",
   "version": "1.0.0",
   "private": true,
-  "description": "Bühne – 3D-Szenenplanung für KI-Videoproduktion",
+  "description": "B\u00fchne \u2013 3D-Szenenplanung f\u00fcr KI-Videoproduktion",
   "scripts": {
     "start": "python3 -m http.server 4173 --bind 127.0.0.1",
-    "test": "npx playwright test"
+    "test": "npx playwright test",
+    "vocab": "node scripts/generate-vocabulary.mjs"
   },
   "dependencies": {
     "three": "^0.187.0"

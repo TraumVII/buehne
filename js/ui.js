@@ -8,6 +8,7 @@ import {
   POSE_LABELS,
   TYPE_LABELS
 } from './config.js';
+import { getVocabulary } from './parser.js';
 
 export function bindUI(app) {
   const els = {
@@ -220,14 +221,182 @@ export function bindUI(app) {
     showTab('edit');
   });
 
-  document.getElementById('btn-parse').addEventListener('click', () => {
+  function buildSceneFromPrompt() {
     const text = document.getElementById('input-prompt').value.trim();
     if (!text) {
       toast('Bitte eine Szenenbeschreibung eingeben');
-      return;
+      return null;
     }
     const plan = app.parse(text);
     toast(plan.summary);
+    return plan;
+  }
+
+  document.getElementById('btn-parse').addEventListener('click', () => {
+    buildSceneFromPrompt();
+  });
+
+  function renderVocabulary() {
+    const root = document.getElementById('vocab-list');
+    if (!root) return;
+    root.innerHTML = '';
+    getVocabulary().sections.forEach((section) => {
+      const wrap = document.createElement('section');
+      wrap.className = 'vocab-section';
+      const heading = document.createElement('h4');
+      heading.textContent = section.title;
+      wrap.appendChild(heading);
+      if (section.note) {
+        const note = document.createElement('p');
+        note.className = 'hint';
+        note.textContent = section.note;
+        wrap.appendChild(note);
+      }
+      if (section.groups) {
+        section.groups.forEach((group) => {
+          const line = document.createElement('p');
+          line.className = 'vocab-group';
+          const label = document.createElement('strong');
+          label.textContent = `${group.label}: `;
+          line.append(label, document.createTextNode(group.words.join(', ')));
+          wrap.appendChild(line);
+        });
+      }
+      if (section.words) {
+        const line = document.createElement('p');
+        line.className = 'vocab-words';
+        line.textContent = section.words.join(', ');
+        wrap.appendChild(line);
+      }
+      if (section.sentences) {
+        const list = document.createElement('ul');
+        section.sentences.forEach((sentence) => {
+          const item = document.createElement('li');
+          item.textContent = sentence;
+          list.appendChild(item);
+        });
+        wrap.appendChild(list);
+      }
+      root.appendChild(wrap);
+    });
+  }
+  renderVocabulary();
+
+  const micButton = document.getElementById('btn-mic');
+  const micLabel = document.getElementById('mic-label');
+  const speechStatus = document.getElementById('speech-status');
+  const autoParse = document.getElementById('chk-auto-parse');
+  const promptField = document.getElementById('input-prompt');
+  let recognition = null;
+  let listening = false;
+  let sessionPrefix = '';
+  let heardSpeech = false;
+  let speechFailed = false;
+
+  function speechCtor() {
+    return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  }
+
+  function setSpeechStatus(message, isError = false) {
+    if (!speechStatus) return;
+    if (!message) {
+      speechStatus.hidden = true;
+      speechStatus.textContent = '';
+      speechStatus.classList.remove('is-error');
+      speechStatus.removeAttribute('role');
+      return;
+    }
+    speechStatus.hidden = false;
+    speechStatus.textContent = message;
+    speechStatus.classList.toggle('is-error', isError);
+    speechStatus.setAttribute('role', isError ? 'alert' : 'status');
+  }
+
+  function setListening(active) {
+    listening = active;
+    micButton.classList.toggle('listening', active);
+    micButton.setAttribute('aria-pressed', String(active));
+    micLabel.textContent = active ? 'Hört zu…' : 'Sprechen';
+  }
+
+  function collectTranscript(event) {
+    let spoken = '';
+    const results = event.results || [];
+    for (let i = 0; i < results.length; i += 1) {
+      spoken += results[i][0]?.transcript || '';
+    }
+    return spoken.trim();
+  }
+
+  function stopListening() {
+    if (!recognition) {
+      setListening(false);
+      return;
+    }
+    try {
+      recognition.stop();
+    } catch {
+      setListening(false);
+    }
+  }
+
+  function finishListening() {
+    const shouldBuild = autoParse?.checked && heardSpeech && !speechFailed && promptField.value.trim();
+    recognition = null;
+    setListening(false);
+    if (shouldBuild) buildSceneFromPrompt();
+  }
+
+  function startListening() {
+    const Ctor = speechCtor();
+    if (!Ctor) {
+      setSpeechStatus('Spracheingabe wird hier nicht unterstützt. Auf dem iPhone kannst du das Mikrofon der iOS-Tastatur nutzen, um den Text zu diktieren.', true);
+      return;
+    }
+    setSpeechStatus('');
+    speechFailed = false;
+    heardSpeech = false;
+    sessionPrefix = promptField.value.trim();
+    const instance = new Ctor();
+    instance.lang = 'de-DE';
+    instance.interimResults = true;
+    instance.continuous = true;
+    instance.onresult = (event) => {
+      const spoken = collectTranscript(event);
+      if (spoken) heardSpeech = true;
+      promptField.value = [sessionPrefix, spoken].filter(Boolean).join(sessionPrefix && spoken ? ' ' : '');
+    };
+    instance.onerror = (event) => {
+      const code = event?.error || '';
+      if (code === 'aborted') return;
+      speechFailed = true;
+      const messages = {
+        'not-allowed': 'Kein Zugriff auf das Mikrofon. Bitte die Berechtigung in den Einstellungen erlauben.',
+        'service-not-allowed': 'Kein Zugriff auf das Mikrofon. Bitte die Berechtigung in den Einstellungen erlauben.',
+        'no-speech': 'Es wurde keine Sprache erkannt. Bitte noch einmal versuchen.',
+        network: 'Die Spracherkennung braucht eine Netzwerkverbindung. Bitte die Verbindung prüfen.',
+        'audio-capture': 'Es wurde kein Mikrofon gefunden.'
+      };
+      setSpeechStatus(messages[code] || 'Die Spracheingabe ist fehlgeschlagen. Bitte noch einmal versuchen.', true);
+    };
+    instance.onend = () => {
+      finishListening();
+    };
+    recognition = instance;
+    setListening(true);
+    try {
+      instance.start();
+    } catch (error) {
+      speechFailed = true;
+      setListening(false);
+      recognition = null;
+      setSpeechStatus('Die Spracheingabe konnte nicht gestartet werden. Bitte noch einmal versuchen.', true);
+    }
+  }
+
+  micButton.addEventListener('click', () => {
+    if (listening) stopListening();
+    else startListening();
   });
 
   let exportMode = 'color';

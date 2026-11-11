@@ -1,5 +1,6 @@
 import { BuehneApp } from './app.js';
 import { bindUI } from './ui.js';
+import { getVocabulary } from './parser.js';
 
 document.addEventListener('gesturestart', (event) => event.preventDefault());
 document.addEventListener('dblclick', (event) => {
@@ -99,6 +100,9 @@ window.Buehne = {
   },
   redo() {
     app.redo();
+  },
+  getVocabulary() {
+    return getVocabulary();
   }
 };
 

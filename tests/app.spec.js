@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
+import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
+import { formatVocabularyMarkdown } from '../js/parser.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const screenshotDir = path.resolve(__dirname, '../screenshots');
@@ -232,6 +234,45 @@ test.describe('Bühne', () => {
     await page.evaluate(() => window.Buehne.undo());
     expect(await page.evaluate(() => window.Buehne.getState().aspect)).toBe('16:9');
   });
+
+  test('VOCABULARY.md entspricht den Parser-Daten', () => {
+    const disk = readFileSync(path.resolve(__dirname, '../VOCABULARY.md'), 'utf8');
+    expect(disk).toBe(formatVocabularyMarkdown());
+    expect(disk).toContain('Tisch');
+    expect(disk).toContain('Stuhl');
+    expect(disk).toContain('sitzt');
+  });
+
+  test('Wortschatz-Bereich listet Parser-Wörter und zeigt die Spracheingabe', async ({ page }) => {
+    await page.goto('/');
+    await waitReady(page);
+    await page.getByRole('tab', { name: 'Text' }).click();
+    await expect(page.locator('#btn-mic')).toBeVisible();
+    await expect(page.locator('#btn-mic')).toContainText('Sprechen');
+    const vocab = page.locator('#vocab-box');
+    await expect(vocab).toBeVisible();
+    await expect(vocab.locator('summary')).toHaveText('Was die App versteht');
+    await vocab.locator('summary').click();
+    await expect(vocab).toContainText('Tisch');
+    await expect(vocab).toContainText('Stuhl');
+    await expect(vocab).toContainText('sitzt');
+    await page.evaluate(() => {
+      const panels = document.getElementById('panels');
+      const mic = document.getElementById('btn-mic');
+      if (!panels || !mic) return;
+      const delta = mic.getBoundingClientRect().top - panels.getBoundingClientRect().top;
+      panels.scrollTop += delta - 6;
+    });
+    await page.waitForTimeout(300);
+    const micBox = await page.locator('#btn-mic').boundingBox();
+    const vocabBox = await page.locator('#vocab-box summary').boundingBox();
+    const sheetBox = await page.locator('#sheet').boundingBox();
+    expect(micBox.y).toBeGreaterThan(sheetBox.y + 36);
+    expect(micBox.y + 24).toBeLessThan(sheetBox.y + sheetBox.height);
+    expect(vocabBox.y).toBeGreaterThan(sheetBox.y + 36);
+    expect(vocabBox.y + 20).toBeLessThan(sheetBox.y + sheetBox.height);
+    await page.screenshot({ path: path.join(screenshotDir, '06-sprache.png'), fullPage: true });
+  });
 });
 
 test.describe('Querformat', () => {
@@ -267,5 +308,110 @@ test.describe('Querformat', () => {
     await page.waitForTimeout(250);
     const state = await page.evaluate(() => window.Buehne.getState());
     expect(state.selectedId).toBe(id);
+  });
+
+  test('alle Registerkarten sind vollständig sichtbar', async ({ page }) => {
+    await page.goto('/');
+    await waitReady(page);
+    await page.waitForTimeout(300);
+    const names = ['Einfügen', 'Bearbeiten', 'Kamera', 'Licht', 'Text', 'Export'];
+    for (const name of names) {
+      const tab = page.getByRole('tab', { name, exact: true });
+      await expect(tab).toBeVisible();
+      await expect(tab).toBeInViewport();
+      const box = await tab.boundingBox();
+      expect(box).toBeTruthy();
+      expect(box.x).toBeGreaterThanOrEqual(-1);
+      expect(box.x + box.width).toBeLessThanOrEqual(875);
+      expect(box.y).toBeGreaterThanOrEqual(-1);
+      expect(box.y + box.height).toBeLessThanOrEqual(403);
+    }
+    await page.screenshot({ path: path.join(screenshotDir, '07-querformat-tabs.png'), fullPage: true });
+  });
+});
+
+function installFakeSpeech(page) {
+  return page.addInitScript(() => {
+    class FakeSpeechRecognition {
+      constructor() {
+        this.lang = '';
+        this.interimResults = false;
+        this.continuous = false;
+        this.onresult = null;
+        this.onerror = null;
+        this.onend = null;
+        this.onstart = null;
+        window.__lastRecognition = this;
+      }
+      start() {
+        this._started = true;
+        this.onstart?.();
+      }
+      stop() {
+        this.onend?.();
+      }
+      abort() {
+        this.onend?.();
+      }
+    }
+    window.SpeechRecognition = FakeSpeechRecognition;
+    window.webkitSpeechRecognition = FakeSpeechRecognition;
+  });
+}
+
+test.describe('Spracheingabe', () => {
+  test('übernimmt erkannten Text und baut die Szene', async ({ page }) => {
+    await installFakeSpeech(page);
+    await page.goto('/');
+    await waitReady(page);
+    await page.getByRole('tab', { name: 'Text' }).click();
+    await expect(page.locator('#chk-auto-parse')).toBeChecked();
+    await page.getByRole('button', { name: /Sprechen|Spracheingabe|Hört zu/ }).click();
+    await expect(page.locator('#btn-mic')).toContainText('Hört zu');
+    await page.evaluate(() => {
+      const rec = window.__lastRecognition;
+      const results = [{
+        0: { transcript: 'eine Person sitzt links, eine andere steht rechts' },
+        isFinal: true,
+        length: 1
+      }];
+      rec.onresult({ results, resultIndex: 0 });
+      rec.onend();
+    });
+    await expect(page.locator('#input-prompt')).toHaveValue(/eine Person sitzt links, eine andere steht rechts/);
+    const state = await page.evaluate(() => window.Buehne.getState());
+    expect(state.items.filter((item) => item.type === 'figure')).toHaveLength(2);
+    const sitting = state.items.find((item) => item.pose === 'sitzen');
+    const standing = state.items.find((item) => item.pose === 'stehen');
+    expect(sitting.position[0]).toBeLessThan(0);
+    expect(standing.position[0]).toBeGreaterThan(0);
+  });
+
+  test('zeigt einen Hinweis bei verweigerter Mikrofon-Berechtigung', async ({ page }) => {
+    await installFakeSpeech(page);
+    await page.goto('/');
+    await waitReady(page);
+    await page.getByRole('tab', { name: 'Text' }).click();
+    await page.getByRole('button', { name: /Sprechen|Spracheingabe|Hört zu/ }).click();
+    await page.evaluate(() => {
+      const rec = window.__lastRecognition;
+      rec.onerror({ error: 'not-allowed' });
+      rec.onend();
+    });
+    await expect(page.locator('#speech-status')).toBeVisible();
+    await expect(page.locator('#speech-status')).toContainText(/Mikrofon|Berechtigung|erlauben/i);
+  });
+
+  test('zeigt einen Fallback-Hinweis ohne Speech API', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.SpeechRecognition = undefined;
+      window.webkitSpeechRecognition = undefined;
+    });
+    await page.goto('/');
+    await waitReady(page);
+    await page.getByRole('tab', { name: 'Text' }).click();
+    await page.getByRole('button', { name: /Sprechen|Spracheingabe/ }).click();
+    await expect(page.locator('#speech-status')).toBeVisible();
+    await expect(page.locator('#speech-status')).toContainText(/nicht unterstützt|Tastatur|iOS|iPhone/i);
   });
 });
