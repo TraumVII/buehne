@@ -589,3 +589,26 @@ body.layout-side #tabs button {
 .world-grid button {
   font-size: 12px;
 }
+
+#render-error-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+  padding: 24px;
+  background: #152036;
+  color: #e8eef8;
+  z-index: 21;
+}
+#render-error-hint button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 12px;
+  background: #c8d6f2;
+  color: #152036;
+  font: inherit;
+}

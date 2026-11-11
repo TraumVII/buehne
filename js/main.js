@@ -122,6 +122,9 @@ window.Buehne = {
   },
   getPerformanceInfo() {
     return app.getPerformanceInfo();
+  },
+  applyLightPreset(name) {
+    app.applyLightPreset(name);
   }
 };
 

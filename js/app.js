@@ -10,6 +10,7 @@ import {
   STORAGE_KEY,
   TYPE_LABELS,
   clamp,
+  colorLuma,
   colorToHex,
   focalToVerticalFov,
   uid
@@ -37,7 +38,8 @@ import { EnvironmentWorld } from './environments.js';
 import {
   Atmosphere,
   DEFAULT_SKY,
-  lightingFromSky,
+  lightsFromSkyState,
+  nightKeyLight,
   presetFromHour,
   sunFromHour
 } from './atmosphere.js';
@@ -78,6 +80,9 @@ export class BuehneApp {
     this.environmentId = 'none';
     this.skyState = structuredClone(DEFAULT_SKY);
     this._lastTick = 0;
+    this._keyLightIsMoon = false;
+    this._nightClear = 0x101014;
+    this._renderFailed = false;
   }
 
   init() {
@@ -157,6 +162,15 @@ export class BuehneApp {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.06;
+    this.canvas.addEventListener('webglcontextlost', (event) => {
+      event.preventDefault();
+      this._showRenderHint('Die 3D-Ansicht wurde unterbrochen. Tippe auf „Erneut versuchen“.');
+    });
+    this.canvas.addEventListener('webglcontextrestored', () => {
+      this._hideRenderHint();
+      this._renderFailed = false;
+      this.resize();
+    });
   }
 
   _setupScene() {
@@ -219,6 +233,9 @@ export class BuehneApp {
     this.sun.shadow.bias = -0.0008;
     this.scene.add(this.sun);
     this.scene.add(this.sun.target);
+
+    this.hemi = new THREE.HemisphereLight(0xdde6f5, 0x3a3a38, 0.14);
+    this.scene.add(this.hemi);
 
     this.moonLight = new THREE.DirectionalLight(0xc5d4f0, 0);
     this.moonLight.castShadow = false;
@@ -331,20 +348,29 @@ export class BuehneApp {
 
   _loop() {
     const tick = () => {
-      const now = performance.now();
-      const dt = this._lastTick ? Math.min(0.05, (now - this._lastTick) / 1000) : 0.016;
-      this._lastTick = now;
-      this.atmosphere?.tick(dt);
-      this.orbit.update();
-      if (this.throughShot) {
-        this.shotTarget.copy(this.orbit.target);
-      } else {
-        this.workTarget.copy(this.orbit.target);
+      try {
+        const now = performance.now();
+        const dt = this._lastTick ? Math.min(0.05, (now - this._lastTick) / 1000) : 0.016;
+        this._lastTick = now;
+        this.atmosphere?.tick(dt);
+        this.orbit.update();
+        if (this.throughShot) {
+          this.shotTarget.copy(this.orbit.target);
+        } else {
+          this.workTarget.copy(this.orbit.target);
+        }
+        this._updateShotHelper();
+        this._updateTransformViewport();
+        this.render();
+        this._updateOverlay();
+        if (this._renderFailed) {
+          this._renderFailed = false;
+          this._hideRenderHint();
+        }
+      } catch (error) {
+        if (!this._renderFailed) console.error(error);
+        this._showRenderHint('Die 3D-Ansicht konnte nicht gezeichnet werden. Tippe auf „Erneut versuchen“.');
       }
-      this._updateShotHelper();
-      this._updateTransformViewport();
-      this.render();
-      this._updateOverlay();
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -381,7 +407,7 @@ export class BuehneApp {
       if (area.w > 1 && area.h > 1) {
         this.workCamera.aspect = area.w / area.h;
         this.workCamera.updateProjectionMatrix();
-        this._renderIntoRect(area, this.workCamera, 0x101014);
+        this._renderIntoRect(area, this.workCamera, this._nightClear || 0x101014);
       }
     }
   }
@@ -492,28 +518,109 @@ export class BuehneApp {
     this.shotCamera.updateProjectionMatrix();
   }
 
+  _isNight() {
+    if (this.currentLightPreset === 'nacht') return true;
+    if (this.currentLightPreset === 'studio' || this.currentLightPreset === 'abend'
+      || this.currentLightPreset === 'morgen' || this.currentLightPreset === 'mittag') {
+      return false;
+    }
+    return sunFromHour(this.skyState?.hour ?? 13).elevation < -8;
+  }
+
+  _showRenderHint(message) {
+    if (this._renderFailed) return;
+    this._renderFailed = true;
+    const el = document.getElementById('render-error-hint');
+    const text = document.getElementById('render-error-text');
+    if (text) text.textContent = message;
+    if (el) el.hidden = false;
+  }
+
+  _hideRenderHint() {
+    const el = document.getElementById('render-error-hint');
+    if (el) el.hidden = true;
+  }
+
   _syncSun() {
-    const { azimuth, elevation, intensity, color } = this.lights.sun;
-    const az = THREE.MathUtils.degToRad(azimuth);
-    const el = THREE.MathUtils.degToRad(elevation);
+    const stored = this.lights.sun;
+    const night = this._isNight();
+    this._keyLightIsMoon = night;
+
+    let keyAz = stored.azimuth;
+    let keyEl = stored.elevation;
+    let keyInt = stored.intensity;
+    let keyColor = stored.color;
+    let skyAz = stored.azimuth;
+    let skyEl = stored.elevation;
+
+    if (night) {
+      const luma = colorLuma(stored.color);
+      const legacy = stored.elevation < 4 && (stored.intensity < 0.25 || luma < 0.18);
+      const lifted = nightKeyLight(this.skyState.moonPhase);
+      if (legacy) {
+        keyAz = (stored.azimuth + 180) % 360;
+        keyEl = Math.max(12, -stored.elevation);
+        keyInt = lifted.intensity;
+        keyColor = lifted.color;
+        skyAz = stored.azimuth;
+        skyEl = Math.min(stored.elevation, -8);
+        stored.azimuth = keyAz;
+        stored.elevation = keyEl;
+        stored.intensity = keyInt;
+        stored.color = keyColor;
+        if (this.lights.ambient.intensity < 0.22 || colorLuma(this.lights.ambient.color) < 0.18) {
+          this.lights.ambient.intensity = lifted.ambient.intensity;
+          this.lights.ambient.color = lifted.ambient.color;
+        }
+      } else {
+        if (luma < 0.18) {
+          keyColor = lifted.color;
+          stored.color = keyColor;
+        }
+        if (keyInt < 0.15) {
+          keyInt = lifted.intensity;
+          stored.intensity = keyInt;
+        }
+        keyAz = stored.azimuth;
+        keyEl = stored.elevation;
+        skyAz = (keyAz + 180) % 360;
+        skyEl = -Math.max(Math.abs(keyEl), 8);
+      }
+    }
+
+    const az = THREE.MathUtils.degToRad(keyAz);
+    const el = THREE.MathUtils.degToRad(keyEl);
     const sunDist = this.environmentId === 'none' ? 14 : 28;
+    const y = Math.sin(el) * sunDist;
     this.sun.position.set(
       Math.sin(az) * Math.cos(el) * sunDist,
-      Math.sin(el) * sunDist,
+      night ? Math.max(y, 3) : y,
       Math.cos(az) * Math.cos(el) * sunDist
     );
-    this.sun.intensity = intensity;
-    this.sun.color.set(color);
-    this.sun.castShadow = this.lights.shadows && elevation > 2;
+    this.sun.intensity = keyInt;
+    this.sun.color.set(keyColor);
+    this.sun.castShadow = this.lights.shadows && keyEl > 2;
     this.sun.target.position.set(0, 0, 0);
     this.sun.target.updateMatrixWorld();
-    this.ambient.intensity = this.lights.ambient.intensity;
+    this.ambient.intensity = night
+      ? Math.max(this.lights.ambient.intensity, 0.26)
+      : this.lights.ambient.intensity;
     this.ambient.color.set(this.lights.ambient.color);
+    if (this.hemi) {
+      this.hemi.intensity = night ? 0.28 : 0.12;
+      this.hemi.color.set(night ? '#8aa0c8' : '#dde6f5');
+      this.hemi.groundColor.set(night ? '#1c2434' : '#6a645c');
+    }
     this.renderer.shadowMap.enabled = this.lights.shadows;
+    this._nightClear = night ? 0x152036 : 0x101014;
+    if (this.scene?.background?.isColor) {
+      this.scene.background.set(this._nightClear);
+    }
     if (this.atmosphere) {
       this.atmosphere.setEnclosed(this.environmentId === 'hoehle');
-      const info = this.atmosphere.apply(this.skyState, azimuth, elevation, { environmentId: this.environmentId });
+      const info = this.atmosphere.apply(this.skyState, skyAz, skyEl, { environmentId: this.environmentId });
       if (this.moonLight) {
+        // Key light already is the moon at night; keep a dim fill only by day.
         const moonAz = THREE.MathUtils.degToRad(info.moonAzimuth);
         const moonEl = THREE.MathUtils.degToRad(info.moonElevation);
         this.moonLight.position.set(
@@ -521,12 +628,14 @@ export class BuehneApp {
           Math.sin(moonEl) * 20,
           Math.cos(moonAz) * Math.cos(moonEl) * 20
         );
-        this.moonLight.intensity = info.moon.intensity;
+        this.moonLight.intensity = night ? 0 : info.moon.intensity;
         this.moonLight.color.set(info.moon.color);
         this.moonLight.target.position.set(0, 0, 0);
         this.moonLight.target.updateMatrixWorld();
       }
-      if (info.exposure != null) this.renderer.toneMappingExposure = info.exposure;
+      if (info.exposure != null) {
+        this.renderer.toneMappingExposure = night ? Math.max(info.exposure, 1.02) : info.exposure;
+      }
     }
   }
 
@@ -697,15 +806,20 @@ export class BuehneApp {
   setSky(partial = {}, options = {}) {
     Object.assign(this.skyState, partial);
     if (partial.hour != null && !options.skipLights) {
-      const sun = sunFromHour(this.skyState.hour);
-      const look = lightingFromSky(this.skyState, sun.elevation);
-      this.lights.sun.azimuth = sun.azimuth;
-      this.lights.sun.elevation = sun.elevation;
-      this.lights.sun.intensity = look.sun.intensity;
-      this.lights.sun.color = look.sun.color;
-      this.lights.ambient.intensity = look.ambient.intensity;
-      this.lights.ambient.color = look.ambient.color;
+      const resolved = lightsFromSkyState(this.skyState);
+      this.lights.sun.azimuth = resolved.sun.azimuth;
+      this.lights.sun.elevation = resolved.sun.elevation;
+      this.lights.sun.intensity = resolved.sun.intensity;
+      this.lights.sun.color = resolved.sun.color;
+      this.lights.ambient.intensity = resolved.ambient.intensity;
+      this.lights.ambient.color = resolved.ambient.color;
       this.currentLightPreset = presetFromHour(this.skyState.hour);
+    } else if (this._isNight() && partial.moonPhase != null) {
+      const key = nightKeyLight(this.skyState.moonPhase);
+      this.lights.sun.intensity = key.intensity;
+      this.lights.sun.color = key.color;
+      this.lights.ambient.intensity = key.ambient.intensity;
+      this.lights.ambient.color = key.ambient.color;
     }
     this._syncSun();
     this._finishSetting(options);
@@ -950,10 +1064,16 @@ export class BuehneApp {
     const preset = LIGHT_PRESETS[name];
     if (!preset) return;
     this.currentLightPreset = name;
-    this.lights.ambient = { ...preset.ambient };
-    this.lights.sun = { ...preset.sun };
     const hourMap = { morgen: 7, mittag: 13, abend: 19.15, nacht: 22.6, studio: 13 };
     if (hourMap[name] != null) this.skyState.hour = hourMap[name];
+    if (name === 'nacht') {
+      const resolved = lightsFromSkyState(this.skyState);
+      this.lights.ambient = { ...resolved.ambient };
+      this.lights.sun = { ...resolved.sun };
+    } else {
+      this.lights.ambient = { ...preset.ambient };
+      this.lights.sun = { ...preset.sun };
+    }
     this._syncSun();
     if (!options.skipCommit) {
       this.commit();
@@ -1659,6 +1779,7 @@ export class BuehneApp {
       shots: this.shots,
       lights: this.lights,
       currentLightPreset: this.currentLightPreset,
+      keyLightIsMoon: this._keyLightIsMoon,
       environment: this.environmentId,
       sky: { ...this.skyState },
       canUndo: this.history.canUndo(),
@@ -1671,11 +1792,29 @@ export class BuehneApp {
 
   getPerformanceInfo() {
     const info = this.renderer.info.render;
+    const gl = this.renderer.getContext();
+    const sunPos = this.sun.position;
+    const sunU = this.atmosphere?.sky?.material?.uniforms?.sunPosition?.value;
+    const values = [sunPos.x, sunPos.y, sunPos.z, this.sun.intensity, sunU?.x, sunU?.y, sunU?.z];
     return {
       drawCalls: info.calls,
       triangles: info.triangles,
       points: info.points,
-      lines: info.lines
+      lines: info.lines,
+      renderRect: { ...this._lastRenderRect },
+      keyLightIsMoon: this._keyLightIsMoon === true,
+      sun: {
+        x: sunPos.x,
+        y: sunPos.y,
+        z: sunPos.z,
+        intensity: this.sun.intensity,
+        elevation: this.lights.sun.elevation,
+        azimuth: this.lights.sun.azimuth,
+        color: this.lights.sun.color
+      },
+      sunUniform: sunU ? { x: sunU.x, y: sunU.y, z: sunU.z } : null,
+      hasNaN: values.some((value) => value != null && !Number.isFinite(value)),
+      webglError: gl ? gl.getError() : -1
     };
   }
 }

@@ -549,6 +549,9 @@ export function bindUI(app) {
     toast(result.ok ? 'Szene geladen' : result.error);
   });
 
+  const retry = document.getElementById('btn-render-retry');
+  if (retry) retry.addEventListener('click', () => window.location.reload());
+
   function format(value, digits = 2) {
     const number = Number(value);
     return Number.isFinite(number) ? number.toFixed(digits) : '0';
@@ -701,6 +704,11 @@ export function bindUI(app) {
       if (document.activeElement !== slider) slider.value = value;
       document.getElementById(valId).textContent = format(slider.value, digits);
     });
+    const night = Boolean(vm.keyLightIsMoon || vm.currentLightPreset === 'nacht');
+    const keyTitle = document.getElementById('key-light-title');
+    const keyColorLabel = document.getElementById('key-light-color-label');
+    if (keyTitle) keyTitle.textContent = night ? 'Mond' : 'Sonne';
+    if (keyColorLabel) keyColorLabel.textContent = night ? 'Mondfarbe' : 'Sonnenfarbe';
     const sunColor = document.getElementById('input-sun-color');
     if (document.activeElement !== sunColor) sunColor.value = vm.lights.sun.color;
     const ambColor = document.getElementById('input-amb-color');

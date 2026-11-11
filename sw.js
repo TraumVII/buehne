@@ -1,4 +1,4 @@
-const CACHE = 'buehne-v4';
+const CACHE = 'buehne-v5';
 const ASSETS = [
   './',
   './index.html',

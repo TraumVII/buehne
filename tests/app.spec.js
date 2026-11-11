@@ -11,6 +11,48 @@ async function waitReady(page) {
   await page.waitForFunction(() => window.Buehne && window.Buehne.isReady, null, { timeout: 20000 });
 }
 
+async function sampleViewport(page) {
+  await page.waitForTimeout(250);
+  return page.evaluate(() => {
+    const canvas = document.getElementById('viewport');
+    const info = window.Buehne.getPerformanceInfo();
+    const rect = info.renderRect || { x: 0, y: 0, w: canvas.clientWidth, h: canvas.clientHeight };
+    const pr = canvas.width / Math.max(1, canvas.clientWidth);
+    const sx = Math.max(0, Math.round(rect.x * pr));
+    const sy = Math.max(0, Math.round(rect.y * pr));
+    const sw = Math.max(1, Math.min(canvas.width - sx, Math.round(rect.w * pr)));
+    const sh = Math.max(1, Math.min(canvas.height - sy, Math.round(rect.h * pr)));
+    const tmp = document.createElement('canvas');
+    tmp.width = sw;
+    tmp.height = sh;
+    const ctx = tmp.getContext('2d');
+    ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+    const { data } = ctx.getImageData(0, 0, sw, sh);
+    let sum = 0;
+    let max = 0;
+    let n = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const y = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      sum += y;
+      if (y > max) max = y;
+      n += 1;
+    }
+    return {
+      mean: sum / Math.max(1, n),
+      max,
+      width: sw,
+      height: sh,
+      keyLightIsMoon: info.keyLightIsMoon,
+      hasNaN: info.hasNaN,
+      webglError: info.webglError,
+      sunY: info.sun?.y,
+      intensity: info.sun?.intensity,
+      elevation: info.sun?.elevation,
+      color: info.sun?.color
+    };
+  });
+}
+
 test.describe('Bühne', () => {
   test('lädt ohne Konsolenfehler', async ({ page }) => {
     const errors = [];
@@ -502,6 +544,53 @@ test.describe('Welt, Größen und Bibliothek', () => {
     await expect(page.locator('#library-results')).not.toContainText('Sofa');
     const hits = await page.evaluate(() => window.Buehne.searchLibrary('Stuhl').map((item) => item.name));
     expect(hits.some((name) => /Stuhl/i.test(name))).toBeTruthy();
+  });
+
+  test('Nacht und Vollmond bleiben erkennbar', async ({ page, browserName }) => {
+    await page.goto('/');
+    await waitReady(page);
+
+    await page.getByRole('tab', { name: 'Licht' }).click();
+    await page.getByRole('button', { name: 'Nacht' }).click();
+    await page.evaluate(() => window.Buehne.setSky({ moonPhase: 'vollmond' }));
+    let stats = await sampleViewport(page);
+    expect(stats.hasNaN, JSON.stringify(stats)).toBeFalsy();
+    expect(stats.mean, JSON.stringify(stats)).toBeGreaterThan(18);
+    expect(stats.max, JSON.stringify(stats)).toBeGreaterThan(50);
+    expect(stats.keyLightIsMoon).toBe(true);
+    expect(stats.elevation).toBeGreaterThan(8);
+    expect(stats.sunY).toBeGreaterThan(2);
+    await expect(page.locator('#key-light-title')).toHaveText('Mond');
+
+    await page.evaluate(() => {
+      window.Buehne.newScene();
+      window.Buehne.applyLightPreset('nacht');
+      window.Buehne.setSky({ moonPhase: 'vollmond' });
+    });
+    stats = await sampleViewport(page);
+    expect(stats.hasNaN, JSON.stringify(stats)).toBeFalsy();
+    expect(stats.mean, JSON.stringify(stats)).toBeGreaterThan(18);
+    expect(stats.max, JSON.stringify(stats)).toBeGreaterThan(50);
+    expect(stats.keyLightIsMoon).toBe(true);
+
+    await page.evaluate(() => {
+      window.Buehne.newScene();
+      window.Buehne.parse('Wald bei Nacht, Vollmond, eine Person');
+      window.Buehne.setWorkView([12.5, 2.4, 14.5], [0, 6.2, -5]);
+    });
+    stats = await sampleViewport(page);
+    expect(stats.hasNaN, JSON.stringify(stats)).toBeFalsy();
+    expect(stats.mean, JSON.stringify(stats)).toBeGreaterThan(18);
+    expect(stats.max, JSON.stringify(stats)).toBeGreaterThan(50);
+    expect(stats.keyLightIsMoon).toBe(true);
+
+    if (browserName === 'chromium') {
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: path.join(screenshotDir, '12-vollmond.png'), fullPage: true });
+    }
+
+    await page.evaluate(() => window.Buehne.applyLightPreset('mittag'));
+    await expect(page.locator('#key-light-title')).toHaveText('Sonne');
   });
 
   test('Wald bleibt für das iPhone leicht genug', async ({ page }) => {

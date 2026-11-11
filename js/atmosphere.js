@@ -98,32 +98,32 @@ export function lightingFromSky(state, elevation) {
     ambColor = '#e8a078';
     fogColor = '#d88862';
     exposure = 0.98;
-  } else if (elevation > -7) {
-    sunIntensity = 0.08;
-    sunColor = '#6a82c8';
-    ambIntensity = 0.16;
-    ambColor = '#3a4a78';
-    fogColor = '#1a2440';
-    exposure = 0.82;
+  } else if (elevation > -9) {
+    sunIntensity = 0.22;
+    sunColor = '#7a92d0';
+    ambIntensity = 0.3;
+    ambColor = '#4a5c80';
+    fogColor = '#24344c';
+    exposure = 1.02;
   } else {
-    sunIntensity = 0.04;
+    sunIntensity = 0;
     sunColor = '#1a2240';
-    ambIntensity = 0.1;
-    ambColor = '#1c2744';
-    fogColor = '#0c1018';
-    exposure = 0.76;
+    ambIntensity = 0.34;
+    ambColor = '#506380';
+    fogColor = '#1a283c';
+    exposure = 1.08;
   }
 
   if (state.weather === 'nebel') {
-    ambIntensity *= 0.85;
-    fogColor = elevation < 0 ? '#1c2230' : '#c8cdd4';
+    ambIntensity *= 0.9;
+    fogColor = elevation < 0 ? '#2a3448' : '#c8cdd4';
   } else if (state.weather === 'regen' || state.clouds === 'gewitter') {
-    ambIntensity *= 0.75;
+    ambIntensity *= 0.8;
     sunIntensity *= 0.65;
-    fogColor = elevation < 0 ? '#141820' : '#8a94a0';
+    fogColor = elevation < 0 ? '#222830' : '#8a94a0';
   } else if (state.weather === 'schnee') {
-    ambColor = elevation < 0 ? '#2a3448' : '#e4eaf2';
-    fogColor = elevation < 0 ? '#1a2230' : '#d5dde8';
+    ambColor = elevation < 0 ? '#3a4860' : '#e4eaf2';
+    fogColor = elevation < 0 ? '#2a3448' : '#d5dde8';
   }
 
   let fogNear = 80;
@@ -150,8 +150,8 @@ export function lightingFromSky(state, elevation) {
     sun: { intensity: sunIntensity, color: sunColor },
     ambient: { intensity: ambIntensity, color: ambColor },
     moon: {
-      intensity: elevation < 4 ? 0.34 * phase.factor : 0.02,
-      color: '#c5d4f0',
+      intensity: elevation < 4 ? 0.58 + 0.72 * phase.factor : 0.04,
+      color: '#c8d6f2',
       factor: phase.factor
     },
     fogColor,
@@ -159,6 +159,57 @@ export function lightingFromSky(state, elevation) {
     fogFar,
     exposure,
     clouds
+  };
+}
+
+export function nightKeyLight(moonPhase = 'vollmond') {
+  const phase = PHASE_MAP[moonPhase] || PHASE_MAP.vollmond;
+  return {
+    intensity: 0.58 + 0.72 * phase.factor,
+    color: '#c8d6f2',
+    ambient: {
+      intensity: 0.28 + 0.12 * phase.factor,
+      color: '#506380'
+    }
+  };
+}
+
+export function moonFromSun(azimuth, elevation) {
+  return {
+    azimuth: (((Number(azimuth) + 180) % 360) + 360) % 360,
+    elevation: -Number(elevation)
+  };
+}
+
+export function lightsFromSkyState(state = DEFAULT_SKY) {
+  const sun = sunFromHour(state.hour);
+  const look = lightingFromSky(state, sun.elevation);
+  if (sun.elevation < -8) {
+    const key = nightKeyLight(state.moonPhase);
+    const moonEl = Math.min(28, Math.max(12, -sun.elevation));
+    return {
+      night: true,
+      celestial: sun,
+      sun: {
+        azimuth: 228,
+        elevation: moonEl,
+        intensity: key.intensity,
+        color: key.color
+      },
+      ambient: { ...key.ambient }
+    };
+  }
+  const dusk = sun.elevation < 0;
+  return {
+    night: false,
+    celestial: sun,
+    sun: {
+      azimuth: sun.azimuth,
+      elevation: dusk ? Math.max(5, 8 + sun.elevation) : sun.elevation,
+      intensity: look.sun.intensity,
+      color: look.sun.color
+    },
+    ambient: { ...look.ambient }
   };
 }
 
@@ -272,10 +323,15 @@ export class Atmosphere {
     this.state = { ...this.state, ...skyState };
     const info = lightingFromSky(this.state, elevation);
     const sunPos = directionFromAzEl(azimuth, elevation, 1);
+    if (!Number.isFinite(sunPos.x) || !Number.isFinite(sunPos.y) || !Number.isFinite(sunPos.z) || sunPos.lengthSq() < 1e-8) {
+      sunPos.set(0, 0.12, -1).normalize();
+    } else {
+      sunPos.normalize();
+    }
     const uniforms = this.sky.material.uniforms;
     uniforms.sunPosition.value.copy(sunPos);
-    uniforms.turbidity.value = elevation < 0 ? 1.4 : elevation > 40 ? 2.6 : this.state.clouds === 'gewitter' ? 12 : 5 + info.clouds.coverage * 7;
-    uniforms.rayleigh.value = elevation < 0 ? 0.22 : elevation < 8 ? 1.1 : elevation > 40 ? 1.8 : 2.2;
+    uniforms.turbidity.value = elevation < 0 ? 2.4 : elevation > 40 ? 2.6 : this.state.clouds === 'gewitter' ? 12 : 5 + info.clouds.coverage * 7;
+    uniforms.rayleigh.value = elevation < 0 ? 0.62 : elevation < 8 ? 1.1 : elevation > 40 ? 1.8 : 2.2;
     uniforms.mieCoefficient.value = this.state.clouds === 'klar' ? 0.004 : 0.007;
     uniforms.mieDirectionalG.value = 0.78;
     uniforms.cloudCoverage.value = info.clouds.coverage;

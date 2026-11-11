@@ -163,11 +163,11 @@
             <input type="checkbox" id="chk-shadows" checked>
             <span>Schatten</span>
           </label>
-          <h3 class="section-title">Sonne</h3>
+          <h3 class="section-title" id="key-light-title">Sonne</h3>
           <label class="slider-row"><span>Richtung</span><input type="range" id="slider-az" min="0" max="360" step="1"><span class="val" id="val-az">140</span></label>
           <label class="slider-row"><span>Höhe</span><input type="range" id="slider-el" min="-30" max="88" step="1"><span class="val" id="val-el">48</span></label>
           <label class="slider-row"><span>Intensität</span><input type="range" id="slider-sun-int" min="0" max="4" step="0.05"><span class="val" id="val-sun-int">1.75</span></label>
-          <label class="color-row">Sonnenfarbe <input type="color" id="input-sun-color" value="#fff2d8"></label>
+          <label class="color-row"><span id="key-light-color-label">Sonnenfarbe</span> <input type="color" id="input-sun-color" value="#fff2d8"></label>
           <h3 class="section-title">Umgebung</h3>
           <label class="slider-row"><span>Intensität</span><input type="range" id="slider-amb-int" min="0" max="2" step="0.02"><span class="val" id="val-amb-int">0.46</span></label>
           <label class="color-row">Umgebungsfarbe <input type="color" id="input-amb-color" value="#c8d0dc"></label>
@@ -248,6 +248,11 @@
   <div id="webgl-error" hidden>
     <strong>WebGL ist nicht verfügbar</strong>
     <p>Diese App braucht einen Browser mit 3D-Unterstützung, etwa Safari auf dem iPhone.</p>
+  </div>
+  <div id="render-error-hint" hidden>
+    <strong>Die 3D-Ansicht ist leer</strong>
+    <p id="render-error-text">Die Szene konnte nicht gezeichnet werden.</p>
+    <button type="button" id="btn-render-retry">Erneut versuchen</button>
   </div>
 
   <script type="module" src="./js/main.js"></script>

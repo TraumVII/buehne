@@ -145,7 +145,7 @@ Sky.SkyShader = {
 			gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
 			gl_Position.z = gl_Position.w; // set z to camera.far
 
-			vSunDirection = normalize( sunPosition );
+			vSunDirection = length( sunPosition ) > 1e-5 ? normalize( sunPosition ) : vec3( 0.0, 0.15, -1.0 );
 
 			vSunE = sunIntensity( vSunDirection.y );
 
@@ -259,8 +259,10 @@ Sky.SkyShader = {
 			float mPhase = hgPhase( cosTheta, mieDirectionalG );
 			vec3 betaMTheta = vBetaM * mPhase;
 
-			vec3 Lin = pow( vSunE * ( ( betaRTheta + betaMTheta ) / ( vBetaR + vBetaM ) ) * ( 1.0 - Fex ), vec3( 1.5 ) );
-			Lin *= mix( vec3( 1.0 ), pow( vSunE * ( ( betaRTheta + betaMTheta ) / ( vBetaR + vBetaM ) ) * Fex, vec3( 1.0 / 2.0 ) ), clamp( pow( 1.0 - vSunDirection.y, 5.0 ), 0.0, 1.0 ) );
+			vec3 extinction = max( vBetaR + vBetaM, vec3( 1e-4 ) );
+			vec3 linBase = max( vSunE * ( ( betaRTheta + betaMTheta ) / extinction ) * ( 1.0 - Fex ), vec3( 0.0 ) );
+			vec3 Lin = pow( linBase, vec3( 1.5 ) );
+			Lin *= mix( vec3( 1.0 ), pow( max( vSunE * ( ( betaRTheta + betaMTheta ) / extinction ) * Fex, vec3( 0.0 ) ), vec3( 1.0 / 2.0 ) ), clamp( pow( max( 1.0 - vSunDirection.y, 0.0 ), 5.0 ), 0.0, 1.0 ) );
 
 			// nightsky
 			float theta = acos( direction.y ); // elevation --> y-axis, [-pi/2, pi/2]
@@ -272,7 +274,9 @@ Sky.SkyShader = {
 			float sundisc = clamp( ( cosTheta - sunAngularDiameterCos ) * 50000.0, 0.0, 1.0 ) * showSunDisc;
 			vec3 sundiscColor = ( 760.0 * sundisc ) * min( vSunE * Fex, 80.0 );
 
-			vec3 texColor = ( Lin + L0 ) * 0.04 + sundiscColor + vec3( 0.0, 0.0003, 0.00075 );
+			float nightFactor = 1.0 - smoothstep( -0.12, 0.02, vSunDirection.y );
+			vec3 nightBlue = vec3( 0.024, 0.04, 0.095 ) * nightFactor;
+			vec3 texColor = ( Lin + L0 ) * 0.04 + sundiscColor + vec3( 0.0, 0.0003, 0.00075 ) + nightBlue;
 
 			// Clouds
 			if ( direction.y > 0.0 && cloudCoverage > 0.0 ) {
@@ -311,7 +315,7 @@ Sky.SkyShader = {
 				float shade = mix( 0.45, 1.0, clamp( beer * powder * 2.6, 0.0, 1.0 ) ); // 2.6 = 1/0.385, normalizes beer*powder peak to 1
 
 				// Henyey-Greenstein forward lobe ( g = 0.7 ): silver lining on rims toward the sun
-				float silver = clamp( 0.51 / pow( 1.49 - cosTheta * 1.4, 1.5 ), 0.0, 3.0 ); // 0.51=1-g^2, 1.49=1+g^2, 1.4=2g
+				float silver = clamp( 0.51 / pow( max( 1.49 - cosTheta * 1.4, 1e-4 ), 1.5 ), 0.0, 3.0 ); // 0.51=1-g^2, 1.49=1+g^2, 1.4=2g
 				float edge = cloudMask * ( 1.0 - cloudMask ) * 4.0;
 
 				vec3 cloudColor = skyAmbient + sunColor * shade;

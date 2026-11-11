@@ -89,8 +89,8 @@ export const LIGHT_PRESETS = {
   },
   nacht: {
     label: 'Nacht',
-    ambient: { intensity: 0.1, color: '#1c2744' },
-    sun: { azimuth: 48, elevation: -20, intensity: 0.05, color: '#1a2240' }
+    ambient: { intensity: 0.4, color: '#506380' },
+    sun: { azimuth: 228, elevation: 26, intensity: 1.3, color: '#c8d6f2' }
   },
   studio: {
     label: 'Studio',
@@ -122,6 +122,15 @@ export function uid(prefix = 'id') {
 
 export function hexToInt(hex) {
   return parseInt(String(hex).replace('#', ''), 16);
+}
+
+export function colorLuma(hex) {
+  const n = hexToInt(hex);
+  if (!Number.isFinite(n)) return 1;
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
 export function colorToHex(color) {
